@@ -1,0 +1,6 @@
+examples/
+data/
+results/
+src/data/__pycache__/
+src/optimizer/data/
+src/data/__pycache__/

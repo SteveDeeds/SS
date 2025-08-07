@@ -36,6 +36,46 @@ def get_symbol_data(symbol: str, period: str = "4y", force_download: bool = Fals
     return download_symbol_data(symbol, period, save_to_file=True)
 
 
+def calculate_extended_period(period: str) -> str:
+    """
+    Calculate an extended period to ensure we get enough trading days.
+    Adds one extra year to account for weekends and holidays.
+    
+    Args:
+        period: Original requested period (e.g., '1y', '2y', '5y')
+        
+    Returns:
+        Extended period string (e.g., '2y' -> '3y')
+    """
+    # Parse the period string
+    period_lower = period.lower()
+    
+    # Handle different period formats
+    if period_lower.endswith('y'):
+        # Year periods: extract number and add 1
+        try:
+            years = int(period_lower[:-1])
+            extended_years = years + 1
+            return f"{extended_years}y"
+        except ValueError:
+            # If parsing fails, return original period
+            return period
+    elif period_lower.endswith('mo'):
+        # Month periods: add 6 months for buffer
+        try:
+            months = int(period_lower[:-2])
+            extended_months = months + 6
+            return f"{extended_months}mo"
+        except ValueError:
+            return period
+    elif period_lower in ['ytd', 'max']:
+        # Special cases - don't extend
+        return period
+    else:
+        # Unknown format, return as-is
+        return period
+
+
 def download_symbol_data(symbol: str, period: str = "4y", save_to_file: bool = True) -> List[Dict]:
     """
     Download historical data for a symbol from Yahoo Finance
@@ -49,10 +89,16 @@ def download_symbol_data(symbol: str, period: str = "4y", save_to_file: bool = T
         List of OHLCV dictionaries
     """
     try:
+        # Calculate extended period to ensure we get enough trading days
+        # Add one extra year to account for weekends/holidays
+        extended_period = calculate_extended_period(period)
+        
         print(f"📡 Downloading fresh data for {symbol} from Yahoo Finance...")
-        # Download data
+        print(f"   Requested: {period}, Downloading: {extended_period} (extra calendar time to ensure enough trading days)")
+        
+        # Download data with extended period
         ticker = yf.Ticker(symbol)
-        df = ticker.history(period=period)
+        df = ticker.history(period=extended_period)
         
         if df.empty:
             raise ValueError(f"No data found for symbol {symbol}")
@@ -97,8 +143,17 @@ def download_symbol_data(symbol: str, period: str = "4y", save_to_file: bool = T
             
             print(f"Data saved to {csv_file}")
         
-        print(f"Downloaded {len(price_history)} days of data for {symbol}")
-        return price_history
+        total_downloaded = len(price_history)
+        print(f"Downloaded {total_downloaded} trading days for {symbol} (requested {period}, downloaded {extended_period})")
+        
+        # Filter to requested period if we downloaded extra data
+        filtered_data = filter_data_by_period(price_history, period)
+        filtered_count = len(filtered_data)
+        
+        if filtered_count < total_downloaded:
+            print(f"   Using {filtered_count} trading days for {period} period (saved {total_downloaded - filtered_count} extra trading days for future use)")
+        
+        return filtered_data
         
     except Exception as e:
         print(f"Error downloading data for {symbol}: {e}")
@@ -119,21 +174,21 @@ def is_cached_data_sufficient(cached_data: List[Dict], period: str) -> bool:
     if not cached_data:
         return False
     
-    # Parse period string
+    # Parse period string - these represent expected trading days for the period
     period_mapping = {
-        '1y': 365,
-        '2y': 730,
-        '3y': 1095,
-        '4y': 1460,
-        '5y': 1825,
-        '1mo': 30,
-        '3mo': 90,
-        '6mo': 180,
-        'ytd': 365,  # Approximate
-        'max': 0  # Special case - use all available data
+        '1y': 252,   # ~252 trading days per year
+        '2y': 504,   # ~504 trading days for 2 years  
+        '3y': 756,   # ~756 trading days for 3 years
+        '4y': 1008,  # ~1008 trading days for 4 years
+        '5y': 1260,  # ~1260 trading days for 5 years
+        '1mo': 21,   # ~21 trading days per month
+        '3mo': 63,   # ~63 trading days for 3 months
+        '6mo': 126,  # ~126 trading days for 6 months
+        'ytd': 180,  # Approximate YTD trading days
+        'max': 0     # Special case - use all available data
     }
     
-    required_days = period_mapping.get(period.lower(), 1460)  # Default to 4 years
+    expected_trading_days = period_mapping.get(period.lower(), 1008)  # Default to 4 years of trading days
     
     # Special case for 'max' - always sufficient
     if period.lower() == 'max':
@@ -142,15 +197,15 @@ def is_cached_data_sufficient(cached_data: List[Dict], period: str) -> bool:
     # Check if we have enough data (flexible for real-world data availability)
     available_days = len(cached_data)
     
-    # For trading data, accept reasonable minimums:
-    # - For 2y request (730 days), accept anything over 400 days (about 1.5 years)
-    # - For 1y request (365 days), accept anything over 250 days (about 10 months)
-    if required_days >= 700:  # 2+ year request
-        min_required_days = max(400, int(required_days * 0.6))
-    elif required_days >= 300:  # 1+ year request
-        min_required_days = max(250, int(required_days * 0.7))
+    # For trading data, accept reasonable minimums based on expected trading days:
+    # - For 2y request (504 trading days), accept anything over 400 days
+    # - For 1y request (252 trading days), accept anything over 200 days
+    if expected_trading_days >= 500:  # 2+ year request
+        min_required_days = max(400, int(expected_trading_days * 0.8))
+    elif expected_trading_days >= 200:  # 1+ year request
+        min_required_days = max(200, int(expected_trading_days * 0.8))
     else:  # Shorter periods
-        min_required_days = int(required_days * 0.8)
+        min_required_days = int(expected_trading_days * 0.85)
     
     # Also check if data is reasonably recent (within last 30 days for flexibility)
     latest_date = cached_data[-1]['date']
@@ -184,26 +239,26 @@ def filter_data_by_period(data: List[Dict], period: str) -> List[Dict]:
     if period.lower() == 'max':
         return data
     
-    # Parse period to days
+    # Parse period to expected trading days
     period_mapping = {
-        '1y': 365,
-        '2y': 730,
-        '3y': 1095,
-        '4y': 1460,
-        '5y': 1825,
-        '1mo': 30,
-        '3mo': 90,
-        '6mo': 180,
-        'ytd': 365,  # Approximate
+        '1y': 252,   # ~252 trading days per year
+        '2y': 504,   # ~504 trading days for 2 years
+        '3y': 756,   # ~756 trading days for 3 years
+        '4y': 1008,  # ~1008 trading days for 4 years
+        '5y': 1260,  # ~1260 trading days for 5 years
+        '1mo': 21,   # ~21 trading days per month
+        '3mo': 63,   # ~63 trading days for 3 months
+        '6mo': 126,  # ~126 trading days for 6 months
+        'ytd': 180,  # Approximate YTD trading days
     }
     
-    required_days = period_mapping.get(period.lower(), 1460)
+    expected_trading_days = period_mapping.get(period.lower(), 1008)
     
-    # Return the most recent N days
-    if len(data) <= required_days:
+    # Return the most recent N trading days (since data only contains trading days)
+    if len(data) <= expected_trading_days:
         return data
     else:
-        return data[-required_days:]
+        return data[-expected_trading_days:]
 
 
 def load_symbol_data(symbol: str, data_dir: str = None) -> List[Dict]:

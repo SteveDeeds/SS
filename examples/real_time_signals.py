@@ -33,22 +33,42 @@ SYMBOL_CONFIGURATIONS = {
     "SDIV": {
         "strategy_class": RSIStrategy,
         "strategy_params": {
-            'rsi_period': 16,
-            'oversold_threshold': 5.0,
-            'overbought_threshold': 65.0,
+            'rsi_period': 13,
+            'oversold_threshold': 23.0,
+            'overbought_threshold': 66.0,
             'cash_percentage': 0.15
         },
         "description": "Global X SuperDividend ETF"
     },
+    "MSTY": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 14,
+            'oversold_threshold': 27.0,
+            'overbought_threshold': 69.0,
+            'cash_percentage': 0.15
+        },
+        "description": "Yieldmax MSTR Option Income Strategy ETF"
+    },    
     "SPXL": {
         "strategy_class": RSIStrategy,
         "strategy_params": {
-            'rsi_period': 10,
-            'oversold_threshold': 10.0,
-            'overbought_threshold': 60.0,
+            'rsi_period': 12,
+            'oversold_threshold': 21.0,
+            'overbought_threshold': 65.0,
             'cash_percentage': 0.15
         },
         "description": "Direxion Daily S&P 500 Bull 3X Shares"
+    },
+    "NVDY": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 12,
+            'oversold_threshold': 34.0,
+            'overbought_threshold': 67.0,
+            'cash_percentage': 0.15
+        },
+        "description": "YieldMax NVDA Option Income Strategy ETF"
     }    
 }
 
