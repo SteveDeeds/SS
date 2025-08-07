@@ -1,0 +1,3 @@
+symbol,strategy_type,run_datetime,test_scenarios,average_return,return_std_dev,roaic,percentile_25_return,win_rate,sharpe_ratio,max_drawdown,total_trades,avg_trades_per_scenario,best_case_return,worst_case_return,median_return,param_fast_period,param_slow_period
+SPXL,MA_Crossover,20250804_170225,50,0.15,0.08,0.32,0.05,0.65,1.2,0,0,0,0,0,0,10,25
+SPXL,MA_Crossover,20250804_170225,50,0.12,0.06,0.28,0.04,0.62,1.5,0,0,0,0,0,0,15,30
