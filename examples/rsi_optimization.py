@@ -2,7 +2,24 @@
 """
 RSI Strategy Continuous Optimization Demo
 
-This example demonstrates how to run RSI strategy optimization continuously for hours,
+This example demonstrates how to run RSI strategy optimization continuously                 # Show CSV file status every 20 combinations
+                if combination_num % 20 == 0:
+                    print(f"📄 CSV Update: {combination_num}/{len(all_combinations)} combinations for {symbol}")
+                    if os.path.exists(output_csv):
+                        with open(output_csv, 'r') as f:
+                            lines = f.readlines()
+                        print(f"   File contains {len(lines)} lines (including header)")
+                    
+                    # Show timing statistics for last 20 combinations
+                    print(f"   ⏱️  Last combination took {duration:.1f}s")
+            
+            print(f"\n✅ {symbol} completed! ({len(all_combinations)} combinations)")
+            print(f"   Results saved to: {output_csv}")
+            print(f"📊 Total combinations tested so far: {total_combinations}")
+            
+            # Log stock completion
+            with open(timing_log_file, 'a') as log_file:
+                log_file.write(f"\n--- {symbol} COMPLETED at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
 constantly updating a CSV file with results. Each parameter combination
 gets added as a new row to enable real-time monitoring of optimization progress.
 
@@ -14,6 +31,7 @@ import os
 import sys
 import time
 import random
+from datetime import datetime
 from itertools import product
 from typing import Dict, List
 
@@ -22,31 +40,55 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.optimizer.grid_search import GridSearchOptimizer
 
+# Fix data directory path issue for caching
+def setup_data_directory():
+    """Ensure we use the main data directory for caching"""
+    import sys
+    import os
+    
+    # Get the project root directory
+    current_file = os.path.abspath(__file__)  # examples/rsi_optimization.py
+    examples_dir = os.path.dirname(current_file)  # examples/
+    project_root = os.path.dirname(examples_dir)  # SS/
+    main_data_dir = os.path.join(project_root, 'data')
+    
+    # Ensure main data directory exists
+    os.makedirs(main_data_dir, exist_ok=True)
+    
+    # Set environment variable for data directory (if the optimizer respects it)
+    os.environ['TRADING_DATA_DIR'] = main_data_dir
+    
+    return main_data_dir
+
+# Setup data directory before optimization
+MAIN_DATA_DIR = setup_data_directory()
+
 # Define RSI parameter ranges to explore (must match RSI strategy's valid ranges)
 rsi_periods = range(10, 30, 2)  # RSI period: 10, 12, 14, 16, 18, 20, 22, 24, 26, 28
 oversold_thresholds = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]  # Oversold threshold
 overbought_thresholds = [60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0]  # Overbought threshold
 cash_percentages = [0.10, 0.15, 0.20, 0.25]
-symbol = "MSTY"
+
+# List of stocks to analyze
+symbols = ["NVDY", "IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY"]
 
 
-def continuous_rsi_optimization_demo():
+def multi_stock_rsi_optimization_demo():
     """
-    Demonstrate continuous RSI optimization with real-time CSV updates
+    Demonstrate RSI optimization across multiple stocks with comprehensive parameter testing
     """
-    print("🔄 CONTINUOUS RSI OPTIMIZATION DEMO")
+    print("🔄 MULTI-STOCK RSI OPTIMIZATION DEMO")
     print("=" * 60)
-    print("This demo runs multiple RSI optimization rounds CONTINUOUSLY,")
-    print("updating a CSV file with results. After completing all")
-    print("parameter combinations, it reshuffles and starts again.")
-    print("Perfect for long-running RSI parameter searches.")
+    print("This demo runs RSI optimization for multiple stocks,")
+    print("testing all parameter combinations for each stock.")
+    print("Results are saved to individual CSV files per stock.")
     print("=" * 60)
     
     # Create results directory
     os.makedirs("results", exist_ok=True)
     
-    # Output CSV file that will be continuously updated
-    output_csv = "results/continuous_rsi_optimization_results.csv"
+    # Create timing log file
+    timing_log_file = "results/rsi_optimization_timing_log.txt"
     
     # Initialize optimizer
     optimizer = GridSearchOptimizer("strategies/rsi_strategy.py")
@@ -57,35 +99,64 @@ def continuous_rsi_optimization_demo():
     print(f"   Oversold thresholds: {oversold_thresholds}")
     print(f"   Overbought thresholds: {overbought_thresholds}")
     print(f"   Cash percentages: {cash_percentages}")
-    print(f"   Total combinations per cycle: {len(rsi_periods) * len(oversold_thresholds) * len(overbought_thresholds) * len(cash_percentages)}")
-    print(f"   Exploration order: Shuffled (random)")
-    print(f"   Output file: {output_csv}")
-    print(f"   🔄 Mode: CONTINUOUS (infinite cycles)")
+    print(f"   Stocks to analyze: {symbols}")
+    print(f"   Total combinations per stock: {len(rsi_periods) * len(oversold_thresholds) * len(overbought_thresholds) * len(cash_percentages)}")
+    print(f"   Simulations per combination: 100")
+    print(f"   Exploration order: Sequential by stock")
+    print(f"   Timing log: {timing_log_file}")
     print()
     
-    # Run optimization continuously
+    # Initialize timing log
+    with open(timing_log_file, 'w') as log_file:
+        log_file.write("=== RSI OPTIMIZATION TIMING LOG ===\n")
+        log_file.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        log_file.write("Format: [Timestamp] Symbol Combo# RSI=X OS=Y OB=Z cash=W -> Duration: Xs ROAIC: Y%\n\n")
+    
+    # Pre-load data for all symbols to ensure proper caching
+    print("📥 Pre-loading data for all symbols to ensure cache consistency...")
+    from src.data.loader import get_symbol_data
+    
+    for symbol in symbols:
+        print(f"   Loading {symbol}...")
+        try:
+            data = get_symbol_data(symbol, period="1y", force_download=False)
+            if data:
+                print(f"   ✅ {symbol}: {len(data)} days loaded")
+            else:
+                print(f"   ⚠️  {symbol}: No data loaded, will download during optimization")
+        except Exception as e:
+            print(f"   ❌ {symbol}: Error loading data - {e}")
+    
+    print("✅ Data pre-loading completed\n")
+    
+    # Run optimization for each stock
     total_combinations = 0
-    cycle_count = 0
     
     try:
-        while True:  # Infinite loop
-            cycle_count += 1
-            print(f"\n🚀 Starting Cycle {cycle_count}")
-            print("=" * 40)
+        for stock_num, symbol in enumerate(symbols, 1):
+            print(f"\n🚀 Analyzing Stock {stock_num}/{len(symbols)}: {symbol}")
+            print("=" * 50)
             
-            # Generate all RSI parameter combinations for this cycle
+            # Output CSV file for this stock
+            output_csv = f"results/rsi_optimization_{symbol}_results.csv"
+            
+            # Generate all RSI parameter combinations for this stock
             all_combinations = list(product(rsi_periods, oversold_thresholds, overbought_thresholds, cash_percentages))
             
             # Shuffle the combinations for random exploration
             random.shuffle(all_combinations)
             
-            print(f"🔀 Shuffled {len(all_combinations)} RSI combinations for Cycle {cycle_count}")
+            print(f"🔀 Testing {len(all_combinations)} RSI combinations for {symbol}")
             
-            # Run through all combinations in this cycle
+            # Run through all combinations for this stock
             for combination_num, (rsi_period, oversold_thresh, overbought_thresh, cash_pct) in enumerate(all_combinations, 1):
                 # Validate thresholds (oversold must be less than overbought)
                 if oversold_thresh >= overbought_thresh:
                     continue  # Skip invalid combinations
+                
+                # Record start time for this combination
+                start_time = time.time()
+                start_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 
                 # Create a small parameter grid for this combination
                 parameter_grid = {
@@ -95,7 +166,7 @@ def continuous_rsi_optimization_demo():
                     'cash_percentage': [cash_pct]
                 }
                 
-                print(f"🔬 Cycle {cycle_count}, Combo {combination_num}/{len(all_combinations)}: "
+                print(f"🔬 {symbol} Combo {combination_num}/{len(all_combinations)}: "
                       f"RSI={rsi_period}, OS={oversold_thresh}, OB={overbought_thresh}, cash={cash_pct}")
                 
                 # Run optimization for this parameter combination
@@ -103,64 +174,236 @@ def continuous_rsi_optimization_demo():
                     symbol=symbol,
                     parameter_grid=parameter_grid,
                     initial_capital=10000,
-                    test_scenarios=20,  # 20 gives us 5% resolution for percentile
+                    test_scenarios=100,  # Increased to 100 simulations
                     export_csv=False  # We'll handle CSV export manually
                 )
                 
-                # Append results to CSV file
+                # Calculate duration
+                end_time = time.time()
+                duration = end_time - start_time
+                
+                # Append results to CSV file for this stock
                 optimizer.export_to_csv(results, output_csv, append_mode=True)
                 
                 # Show progress
                 roaic = results['best_strategy']['roaic']
                 if roaic is not None:
-                    print(f"   ✅ ROAIC: {roaic:.2%}")
+                    roaic_str = f"{roaic:.2%}"
+                    print(f"   ✅ ROAIC: {roaic_str} (Duration: {duration:.1f}s)")
                 else:
-                    print(f"   ✅ ROAIC: None (no valid trades)")
+                    roaic_str = "None"
+                    print(f"   ✅ ROAIC: None (no valid trades) (Duration: {duration:.1f}s)")
+                
+                # Log timing information
+                with open(timing_log_file, 'a') as log_file:
+                    log_file.write(f"[{start_timestamp}] {symbol} Combo#{combination_num} "
+                                 f"RSI={rsi_period} OS={oversold_thresh} OB={overbought_thresh} cash={cash_pct} -> "
+                                 f"Duration: {duration:.1f}s ROAIC: {roaic_str}\n")
                 
                 total_combinations += 1
                 
                 # Brief pause to simulate real-world processing time
-                # In real scenarios, this would be the natural processing time
-                time.sleep(0.5)
+                time.sleep(0.1)
                 
-                # Show CSV file status every few combinations
-                if combination_num % 10 == 0:
-                    print(f"📄 CSV Update: {total_combinations} total combinations tested")
+                # Show CSV file status every 20 combinations
+                if combination_num % 20 == 0:
+                    print(f"📄 CSV Update: {combination_num}/{len(all_combinations)} combinations for {symbol}")
                     if os.path.exists(output_csv):
                         with open(output_csv, 'r') as f:
                             lines = f.readlines()
                         print(f"   File contains {len(lines)} lines (including header)")
             
-            print(f"\n✅ Cycle {cycle_count} completed! ({len(all_combinations)} combinations)")
-            print(f"📊 Total combinations tested so far: {total_combinations}")
-            print(f"🔄 Starting next cycle in 2 seconds...")
-            time.sleep(2)  # Brief pause between cycles
+            print(f"\n✅ {symbol} completed! ({len(all_combinations)} combinations)")
+            print(f"   Results saved to: {output_csv}")
+            print(f"� Total combinations tested so far: {total_combinations}")
     
     except KeyboardInterrupt:
         print(f"\n⏹️ Optimization stopped by user after {total_combinations} combinations")
-        print(f"   Completed {cycle_count} full cycles")
+        # Log interruption
+        with open(timing_log_file, 'a') as log_file:
+            log_file.write(f"\n!!! INTERRUPTED by user at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} !!!\n")
     
-    print(f"\n🎉 Continuous optimization session ended!")
+    print(f"\n🎉 Multi-stock optimization session completed!")
     print(f"   Total combinations tested: {total_combinations}")
-    print(f"   Full cycles completed: {cycle_count}")
-    print(f"   Results file: {output_csv}")
+    print(f"   Stocks analyzed: {stock_num if 'stock_num' in locals() else len(symbols)}")
+    print(f"   Results files in results/ directory")
+    print(f"   Timing log: {timing_log_file}")
     
-    # Show final CSV stats
-    if os.path.exists(output_csv):
-        with open(output_csv, 'r') as f:
+    # Log session completion
+    with open(timing_log_file, 'a') as log_file:
+        log_file.write(f"\n=== SESSION COMPLETED at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+        log_file.write(f"Total combinations tested: {total_combinations}\n")
+        if 'stock_num' in locals():
+            log_file.write(f"Stocks completed: {stock_num}/{len(symbols)}\n")
+    
+    # Show summary of all generated files
+    print(f"\n📋 Generated Results Files:")
+    for symbol in symbols:
+        output_csv = f"results/rsi_optimization_{symbol}_results.csv"
+        if os.path.exists(output_csv):
+            with open(output_csv, 'r') as f:
+                lines = f.readlines()
+            print(f"   {symbol}: {output_csv} ({len(lines)} lines)")
+        else:
+            print(f"   {symbol}: No results file generated")
+    
+    # Show timing log summary
+    if os.path.exists(timing_log_file):
+        print(f"\n⏱️  TIMING ANALYSIS:")
+        with open(timing_log_file, 'r') as f:
             lines = f.readlines()
-        print(f"   Final CSV contains {len(lines)} lines")
         
-        # Show last few lines as preview
-        print(f"\n📋 Last few results:")
-        for line in lines[-3:]:
-            if ',' in line:  # Skip header if it's in the last few lines
-                parts = line.strip().split(',')
-                if len(parts) >= 7:  # Ensure we have enough columns
-                    datetime = parts[0]
-                    params = parts[5] if len(parts) > 5 else "unknown"
-                    roaic = parts[8] if len(parts) > 8 else "0"
-                    print(f"   {datetime}: {params} → ROAIC: {roaic}")
+        # Extract duration information from log
+        durations = []
+        for line in lines:
+            if "Duration:" in line:
+                try:
+                    # Extract duration from "Duration: X.Xs"
+                    duration_part = line.split("Duration: ")[1].split("s")[0]
+                    durations.append(float(duration_part))
+                except (IndexError, ValueError):
+                    continue
+        
+        if durations:
+            avg_duration = sum(durations) / len(durations)
+            min_duration = min(durations)
+            max_duration = max(durations)
+            
+            print(f"   Average time per combination: {avg_duration:.1f}s")
+            print(f"   Fastest combination: {min_duration:.1f}s")
+            print(f"   Slowest combination: {max_duration:.1f}s")
+            print(f"   Total logged combinations: {len(durations)}")
+            
+            # Estimate remaining time if not all stocks completed
+            if 'stock_num' in locals() and stock_num < len(symbols):
+                remaining_stocks = len(symbols) - stock_num
+                combinations_per_stock = len(rsi_periods) * len(oversold_thresholds) * len(overbought_thresholds) * len(cash_percentages)
+                remaining_combinations = remaining_stocks * combinations_per_stock
+                estimated_remaining_time = remaining_combinations * avg_duration
+                
+                hours = int(estimated_remaining_time // 3600)
+                minutes = int((estimated_remaining_time % 3600) // 60)
+                print(f"   Estimated time for remaining stocks: {hours}h {minutes}m")
+        
+        print(f"   Detailed timing log: {timing_log_file}")
+
+
+def analyze_multi_stock_rsi_results():
+    """
+    Analyze the results from multi-stock RSI optimization
+    """
+    print(f"\n📊 ANALYZING MULTI-STOCK RSI RESULTS")
+    print("=" * 60)
+    
+    import csv
+    
+    # Analyze results for each stock
+    for symbol in symbols:
+        output_csv = f"results/rsi_optimization_{symbol}_results.csv"
+        
+        if not os.path.exists(output_csv):
+            print(f"❌ Results file not found for {symbol}: {output_csv}")
+            continue
+        
+        print(f"\n📈 {symbol} Analysis:")
+        print("-" * 30)
+        
+        with open(output_csv, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            results = list(reader)
+        
+        if not results:
+            print(f"❌ No results found in CSV file for {symbol}")
+            continue
+        
+        print(f"📊 Found {len(results)} optimization results for {symbol}")
+        
+        # Convert ROAIC to float and filter valid results
+        valid_results = []
+        for result in results:
+            try:
+                roaic = float(result.get('return_on_avg_invested_capital', 0))
+                if roaic != 0:  # Filter out zero/invalid results
+                    result['roaic_float'] = roaic
+                    valid_results.append(result)
+            except ValueError:
+                continue
+        
+        if not valid_results:
+            print(f"❌ No valid ROAIC results found for {symbol}")
+            continue
+        
+        print(f"✅ Found {len(valid_results)} valid results with non-zero ROAIC for {symbol}")
+        
+        # Find best and worst results
+        best_result = max(valid_results, key=lambda x: x['roaic_float'])
+        worst_result = min(valid_results, key=lambda x: x['roaic_float'])
+        
+        print(f"\n🏆 BEST RESULT for {symbol}:")
+        print(f"   ROAIC: {best_result['roaic_float']:.2%}")
+        print(f"   Parameters: {best_result.get('parameter_combination', 'unknown')}")
+        print(f"   datetime: {best_result.get('datetime', 'unknown')}")
+        
+        print(f"\n📉 WORST RESULT for {symbol}:")
+        print(f"   ROAIC: {worst_result['roaic_float']:.2%}")
+        print(f"   Parameters: {worst_result.get('parameter_combination', 'unknown')}")
+        print(f"   datetime: {worst_result.get('datetime', 'unknown')}")
+        
+        # Calculate statistics
+        roaic_values = [r['roaic_float'] for r in valid_results]
+        avg_roaic = sum(roaic_values) / len(roaic_values)
+        
+        print(f"\n📊 STATISTICS for {symbol}:")
+        print(f"   Average ROAIC: {avg_roaic:.2%}")
+        print(f"   Best ROAIC: {max(roaic_values):.2%}")
+        print(f"   Worst ROAIC: {min(roaic_values):.2%}")
+        print(f"   Range: {max(roaic_values) - min(roaic_values):.2%}")
+    
+    # Create summary comparison across all stocks
+    print(f"\n🌟 CROSS-STOCK SUMMARY:")
+    print("=" * 40)
+    
+    all_best_results = []
+    
+    for symbol in symbols:
+        output_csv = f"results/rsi_optimization_{symbol}_results.csv"
+        
+        if not os.path.exists(output_csv):
+            continue
+            
+        with open(output_csv, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            results = list(reader)
+        
+        valid_results = []
+        for result in results:
+            try:
+                roaic = float(result.get('return_on_avg_invested_capital', 0))
+                if roaic != 0:
+                    result['roaic_float'] = roaic
+                    result['symbol'] = symbol
+                    valid_results.append(result)
+            except ValueError:
+                continue
+        
+        if valid_results:
+            best_for_symbol = max(valid_results, key=lambda x: x['roaic_float'])
+            all_best_results.append(best_for_symbol)
+    
+    if all_best_results:
+        # Find overall best performer
+        overall_best = max(all_best_results, key=lambda x: x['roaic_float'])
+        
+        print(f"\n🏆 OVERALL BEST PERFORMER:")
+        print(f"   Symbol: {overall_best['symbol']}")
+        print(f"   ROAIC: {overall_best['roaic_float']:.2%}")
+        print(f"   Parameters: {overall_best.get('parameter_combination', 'unknown')}")
+        
+        # Show top 3 performers
+        sorted_results = sorted(all_best_results, key=lambda x: x['roaic_float'], reverse=True)
+        print(f"\n🥇 TOP 3 PERFORMING STOCKS:")
+        for i, result in enumerate(sorted_results[:3], 1):
+            print(f"   {i}. {result['symbol']}: {result['roaic_float']:.2%}")
 
 
 def analyze_continuous_rsi_results():
@@ -265,24 +508,24 @@ def analyze_continuous_rsi_results():
 
 
 def main():
-    """Run the continuous RSI optimization demo"""
-    print("🚀 CONTINUOUS RSI OPTIMIZATION WITH REAL-TIME CSV UPDATES")
-    print("This demo shows how to run RSI optimizations for hours while")
-    print("continuously updating a CSV file for real-time monitoring.")
+    """Run the multi-stock RSI optimization demo"""
+    print("🚀 MULTI-STOCK RSI OPTIMIZATION WITH COMPREHENSIVE TESTING")
+    print("This demo runs RSI optimizations across multiple stocks with")
+    print("100 simulations per parameter combination for robust results.")
     print()
     
-    choice = input("Choose demo:\n1. Run continuous RSI optimization\n2. Analyze existing RSI results\n3. Both\nEnter choice (1/2/3): ").strip()
+    choice = input("Choose demo:\n1. Run multi-stock RSI optimization\n2. Analyze existing RSI results\n3. Both\nEnter choice (1/2/3): ").strip()
     
     if choice == "1":
-        continuous_rsi_optimization_demo()
+        multi_stock_rsi_optimization_demo()
     elif choice == "2":
-        analyze_continuous_rsi_results()
+        analyze_multi_stock_rsi_results()
     elif choice == "3":
-        continuous_rsi_optimization_demo()
-        analyze_continuous_rsi_results()
+        multi_stock_rsi_optimization_demo()
+        analyze_multi_stock_rsi_results()
     else:
-        print("Invalid choice. Running continuous RSI optimization by default.")
-        continuous_rsi_optimization_demo()
+        print("Invalid choice. Running multi-stock RSI optimization by default.")
+        multi_stock_rsi_optimization_demo()
     
     print("\n" + "=" * 60)
     print("🎉 COMPLETED!")
