@@ -5,6 +5,7 @@ This adapter allows new-style strategies (with should_buy/should_sell) to work
 with the existing simulator that expects evaluate_and_place_orders method.
 """
 from typing import List, Dict, Optional, Any
+from datetime import timedelta
 import sys
 import os
 
@@ -88,6 +89,38 @@ class StrategyAdapter:
         """
         Adapter method that converts new strategy interface to simulator interface.
         
+        If the strategy implements its own evaluate_and_place_orders method, use that.
+        Otherwise, use the default should_buy/should_sell logic with market orders.
+        
+        Args:
+            price_history: Historical price data
+            portfolio: Current portfolio state
+            current_market_data: Current market data
+            
+        Returns:
+            List of Order objects for the simulator
+        """
+        # Check if strategy has its own evaluate_and_place_orders implementation
+        if hasattr(self.strategy, 'evaluate_and_place_orders') and callable(getattr(self.strategy, 'evaluate_and_place_orders')):
+            # Use strategy's custom order placement logic
+            try:
+                return self.strategy.evaluate_and_place_orders(price_history, portfolio, current_market_data)
+            except Exception as e:
+                if is_strict_mode():
+                    print(f"💥 STRATEGY CUSTOM ORDER PLACEMENT ERROR: {e}")
+                    raise e
+                else:
+                    print(f"⚠️ Strategy custom order placement error, falling back to default: {e}")
+                    # Fall through to default logic
+        
+        # Default logic using should_buy/should_sell with market orders
+        return self._default_evaluate_and_place_orders(price_history, portfolio, current_market_data)
+    
+    def _default_evaluate_and_place_orders(self, price_history: List[Dict], 
+                                         portfolio: Dict, current_market_data: Dict) -> List[Order]:
+        """
+        Default order placement logic using should_buy/should_sell with market orders.
+        
         Args:
             price_history: Historical price data
             portfolio: Current portfolio state
@@ -152,6 +185,12 @@ class StrategyAdapter:
                     # Get placement time from market data
                     placement_time = current_market_data.get('date') if 'date' in current_market_data else None
                     
+                    # Set expiration to next day at market close (4:00 PM)
+                    expiration_time = None
+                    if placement_time:
+                        next_day = placement_time + timedelta(days=1)
+                        expiration_time = next_day.replace(hour=16, minute=0, second=0, microsecond=0)
+                    
                     # Create Order object with correct placement time
                     order = Order(
                         symbol=symbol,
@@ -159,7 +198,8 @@ class StrategyAdapter:
                         quantity=current_shares,
                         limit_price=None,  # Market order
                         stop_price=None,   # No stop loss for now
-                        placement_time=placement_time
+                        placement_time=placement_time,
+                        expiration_date=expiration_time  # Next day at 4:00 PM market close
                     )
 
                     orders.append(order)
