@@ -24,6 +24,10 @@ sys.path.append(project_root)
 from src.data.loader import get_symbol_data, download_symbol_data
 from strategies.rsi_strategy import RSIStrategy
 
+# Email functionality
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
+
 # ============================================================================
 # CONFIGURATION - Symbol-Specific Strategies and Parameters
 # ============================================================================
@@ -100,6 +104,15 @@ GLOBAL_SETTINGS = {
     "analysis_days": 30,  # Days to analyze for signal distribution
     "force_download": False,  # Whether to force fresh data download
     "test_price_adjustment": 0.95  # Multiplier for custom price testing (5% lower)
+}
+
+# Email configuration for Brevo
+EMAIL_CONFIG = {
+    "api_key": os.getenv("BREVO_API_KEY"),  # Set this environment variable
+    "sender_email": "stevendeeds@yahoo.com",
+    "sender_name": "Trading Signals Bot",
+    "recipient_email": "stevendeeds@yahoo.com",
+    "enabled": True
 }
 
 
@@ -310,6 +323,201 @@ class RealTimeSignalGenerator:
             "recent_signals": recent_signals[-10:],  # Last 10 signals
             "total_signals_analyzed": len(recent_signals)
         }
+
+
+class EmailNotifier:
+    """
+    Handles email notifications for trading signals using Brevo API.
+    """
+    
+    def __init__(self):
+        """Initialize email configuration"""
+        self.api_key = EMAIL_CONFIG["api_key"]
+        self.sender_email = EMAIL_CONFIG["sender_email"]
+        self.sender_name = EMAIL_CONFIG["sender_name"]
+        self.recipient_email = EMAIL_CONFIG["recipient_email"]
+        self.enabled = EMAIL_CONFIG["enabled"]
+        
+        if self.enabled and not self.api_key:
+            print("⚠️ Email is enabled but BREVO_API_KEY environment variable is not set")
+            self.enabled = False
+        
+        if self.enabled:
+            # Configure Brevo API
+            configuration = sib_api_v3_sdk.Configuration()
+            configuration.api_key['api-key'] = self.api_key
+            self.api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+    
+    def format_trading_signals_email(self, signals_data: List[Dict]) -> Tuple[str, str]:
+        """
+        Format trading signals data into email subject and HTML body.
+        
+        Args:
+            signals_data: List of signal dictionaries from multiple symbols
+            
+        Returns:
+            Tuple of (subject, html_body)
+        """
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Count signals by type
+        signal_counts = {"BUY": 0, "SELL": 0, "HOLD": 0}
+        buy_symbols = []
+        sell_symbols = []
+        
+        for signal_data in signals_data:
+            signal = signal_data.get("signal", "HOLD")
+            symbol = signal_data.get("symbol", "Unknown")
+            signal_counts[signal] += 1
+            
+            if signal == "BUY":
+                buy_symbols.append(symbol)
+            elif signal == "SELL":
+                sell_symbols.append(symbol)
+        
+        # Create subject line
+        if buy_symbols:
+            subject = f"🔥 BUY Signals: {', '.join(buy_symbols)} - {current_time}"
+        elif sell_symbols:
+            subject = f"📉 SELL Signals: {', '.join(sell_symbols)} - {current_time}"
+        else:
+            subject = f"📊 Trading Signals Update - All HOLD - {current_time}"
+        
+        # Create HTML body
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
+                .container {{ background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                .header {{ color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }}
+                .signal-card {{ margin: 15px 0; padding: 15px; border-radius: 5px; border-left: 4px solid #ddd; }}
+                .signal-buy {{ border-left-color: #28a745; background-color: #f8fff9; }}
+                .signal-sell {{ border-left-color: #dc3545; background-color: #fff8f8; }}
+                .signal-hold {{ border-left-color: #6c757d; background-color: #f8f9fa; }}
+                .signal-title {{ font-size: 18px; font-weight: bold; margin-bottom: 8px; }}
+                .signal-buy .signal-title {{ color: #28a745; }}
+                .signal-sell .signal-title {{ color: #dc3545; }}
+                .signal-hold .signal-title {{ color: #6c757d; }}
+                .details {{ color: #666; margin: 5px 0; }}
+                .thresholds {{ background-color: #f8f9fa; padding: 10px; border-radius: 3px; margin-top: 10px; }}
+                .summary {{ background-color: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+                .footer {{ margin-top: 20px; padding-top: 10px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
+                table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
+                th, td {{ padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }}
+                th {{ background-color: #f8f9fa; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📊 Real-Time Trading Signals Report</h1>
+                    <p>Generated: {current_time}</p>
+                </div>
+                
+                <div class="summary">
+                    <h2>📈 Signal Summary</h2>
+                    <p><strong>BUY Signals:</strong> {signal_counts['BUY']} ({', '.join(buy_symbols) if buy_symbols else 'None'})</p>
+                    <p><strong>SELL Signals:</strong> {signal_counts['SELL']} ({', '.join(sell_symbols) if sell_symbols else 'None'})</p>
+                    <p><strong>HOLD Signals:</strong> {signal_counts['HOLD']}</p>
+                    <p><strong>Total Symbols Analyzed:</strong> {len(signals_data)}</p>
+                </div>
+        """
+        
+        # Add individual signal cards
+        for signal_data in signals_data:
+            symbol = signal_data.get("symbol", "Unknown")
+            signal = signal_data.get("signal", "HOLD")
+            details = signal_data.get("details", {})
+            description = signal_data.get("description", "")
+            
+            current_price = details.get("current_price", 0)
+            rsi_value = details.get("rsi_value", 0)
+            signal_reason = details.get("signal_reason", "No reason provided")
+            oversold_threshold = details.get("oversold_threshold", 0)
+            overbought_threshold = details.get("overbought_threshold", 0)
+            rsi_period = details.get("rsi_period", 0)
+            latest_date = details.get("latest_date", "Unknown")
+            
+            # Get buy/sell thresholds
+            buy_threshold = signal_data.get("buy_threshold", "N/A")
+            sell_threshold = signal_data.get("sell_threshold", "N/A")
+            
+            signal_class = f"signal-{signal.lower()}"
+            signal_emoji = {"BUY": "📈", "SELL": "📉", "HOLD": "⏸️"}[signal]
+            
+            html_body += f"""
+                <div class="signal-card {signal_class}">
+                    <div class="signal-title">{signal_emoji} {symbol} - {signal}</div>
+                    <div class="details"><strong>Description:</strong> {description}</div>
+                    <div class="details"><strong>Current Price:</strong> ${current_price:.2f}</div>
+                    <div class="details"><strong>RSI({rsi_period}):</strong> {rsi_value:.1f}</div>
+                    <div class="details"><strong>Latest Data:</strong> {latest_date}</div>
+                    <div class="details"><strong>Reason:</strong> {signal_reason}</div>
+                    
+                    <div class="thresholds">
+                        <strong>Strategy Parameters:</strong><br>
+                        • Oversold Threshold: {oversold_threshold}<br>
+                        • Overbought Threshold: {overbought_threshold}<br>
+                        • RSI Period: {rsi_period}<br>
+                        <br>
+                        <strong>Price Thresholds:</strong><br>
+                        • BUY Trigger: {buy_threshold}<br>
+                        • SELL Trigger: {sell_threshold}
+                    </div>
+                </div>
+            """
+        
+        html_body += f"""
+                <div class="footer">
+                    <p>This is an automated trading signals report generated by the Real-Time Signals system.</p>
+                    <p>⚠️ <strong>Disclaimer:</strong> This information is for educational purposes only and should not be considered as financial advice. Always do your own research and consult with financial professionals before making investment decisions.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return subject, html_body
+    
+    def send_trading_signals_email(self, signals_data: List[Dict]) -> bool:
+        """
+        Send trading signals email via Brevo.
+        
+        Args:
+            signals_data: List of signal dictionaries from multiple symbols
+            
+        Returns:
+            True if email sent successfully, False otherwise
+        """
+        if not self.enabled:
+            print("📧 Email notifications are disabled")
+            return False
+        
+        try:
+            # Format email content
+            subject, html_body = self.format_trading_signals_email(signals_data)
+            
+            # Create email object
+            send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+                to=[{"email": self.recipient_email}],
+                sender={"email": self.sender_email, "name": self.sender_name},
+                subject=subject,
+                html_content=html_body
+            )
+            
+            # Send email
+            api_response = self.api_instance.send_transac_email(send_smtp_email)
+            print(f"✅ Email sent successfully! Message ID: {api_response.message_id}")
+            return True
+            
+        except ApiException as e:
+            print(f"❌ Brevo API error sending email: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ Error sending email: {e}")
+            return False
 
 
 def demo_real_time_signals():
@@ -583,20 +791,30 @@ def demo_custom_configurations():
         print(f"❌ Custom configuration demo failed: {e}")
 
 
-def production_signals_summary(symbol=None):
+def production_signals_summary(symbol=None, collect_for_email=False):
     """Production-ready simplified signals summary for specific symbol or all symbols"""
+    email_data = []  # Collect data for email if requested
+    
     if symbol is None:
         # Run for all configured symbols
         symbols = list(SYMBOL_CONFIGURATIONS.keys())
         
-        print("🚀 REAL-TIME TRADING SIGNALS - PRODUCTION SUMMARY")
-        print("=" * 80)
+        if not collect_for_email:
+            print("🚀 REAL-TIME TRADING SIGNALS - PRODUCTION SUMMARY")
+            print("=" * 80)
         
         for sym in symbols:
-            print(f"\n📊 {sym}: {SYMBOL_CONFIGURATIONS[sym]['description']}")
-            print("-" * 40)
-            production_signals_summary(sym)
-        return
+            if not collect_for_email:
+                print(f"\n📊 {sym}: {SYMBOL_CONFIGURATIONS[sym]['description']}")
+                print("-" * 40)
+            
+            symbol_data = production_signals_summary(sym, collect_for_email=True)
+            if collect_for_email and symbol_data:
+                email_data.append(symbol_data)
+            elif not collect_for_email:
+                production_signals_summary(sym)
+        
+        return email_data if collect_for_email else None
     
     # Run for specific symbol
     try:
@@ -606,12 +824,13 @@ def production_signals_summary(symbol=None):
         # Get current signal
         signal, details = signal_gen.get_current_signal()
         
-        # CURRENT MARKET SIGNAL
-        print(f"📊 CURRENT MARKET SIGNAL:")
-        print(f"   🎯 Signal: {signal}")
-        print(f"   💹 Current Price: ${details.get('current_price', 'N/A'):.2f}")
-        print(f"   📈 RSI Value: {details.get('rsi_value', 'N/A'):.1f}" if details.get('rsi_value') else "   📈 RSI Value: N/A")
-        print(f"   📅 Latest Data: {details.get('latest_date', 'N/A')}")
+        if not collect_for_email:
+            # CURRENT MARKET SIGNAL
+            print(f"📊 CURRENT MARKET SIGNAL:")
+            print(f"   🎯 Signal: {signal}")
+            print(f"   💹 Current Price: ${details.get('current_price', 'N/A'):.2f}")
+            print(f"   📈 RSI Value: {details.get('rsi_value', 'N/A'):.1f}" if details.get('rsi_value') else "   📈 RSI Value: N/A")
+            print(f"   📅 Latest Data: {details.get('latest_date', 'N/A')}")
         
         # HYPOTHETICAL SCENARIOS (simplified)
         current_price = details.get('current_price', 0)
@@ -649,44 +868,143 @@ def production_signals_summary(symbol=None):
                     'price': curr_price
                 })
         
-        # KEY THRESHOLDS - Based on actual transition points
-        print(f"\n🎯 KEY THRESHOLDS (0.1% precision):")
+        # Find BUY and SELL thresholds
+        buy_threshold = "None in range"
+        sell_threshold = "None in range"
         
         # Find BUY threshold - last transition TO BUY (most restrictive entry point)
         buy_transitions = [t for t in transitions if t['from'] == 'BUY']
         if buy_transitions:
-            # Get the transition point closest to current price (highest percentage for BUY)
-            buy_threshold = max(buy_transitions, key=lambda x: x['change'])
-            print(f"   📈 BUY: {buy_threshold['change']:+5.1f}% (${buy_threshold['price']:.2f})")
-        else:
-            print(f"   📈 BUY: None in range")
+            buy_thresh = max(buy_transitions, key=lambda x: x['change'])
+            buy_threshold = f"{buy_thresh['change']:+5.1f}% (${buy_thresh['price']:.2f})"
         
         # Find SELL threshold - first transition TO SELL (most restrictive exit point)  
         sell_transitions = [t for t in transitions if t['to'] == 'SELL']
         if sell_transitions:
-            # Get the transition point closest to current price (lowest percentage for SELL)
-            sell_threshold = min(sell_transitions, key=lambda x: x['change'])
-            print(f"   📉 SELL: {sell_threshold['change']:+5.1f}% (${sell_threshold['price']:.2f})")
-        else:
-            print(f"   📉 SELL: None in range")
+            sell_thresh = min(sell_transitions, key=lambda x: x['change'])
+            sell_threshold = f"{sell_thresh['change']:+5.1f}% (${sell_thresh['price']:.2f})"
         
-        if transitions:
-            print(f"   🔄 All Transitions:")
-            for t in transitions:
-                print(f"      {t['from']}→{t['to']} at {t['change']:+5.1f}%")
+        if not collect_for_email:
+            # KEY THRESHOLDS - Based on actual transition points
+            print(f"\n🎯 KEY THRESHOLDS (0.1% precision):")
+            print(f"   📈 BUY: {buy_threshold}")
+            print(f"   📉 SELL: {sell_threshold}")
+            
+            if transitions:
+                print(f"   🔄 All Transitions:")
+                for t in transitions:
+                    print(f"      {t['from']}→{t['to']} at {t['change']:+5.1f}%")
+        
+        # If collecting for email, return structured data
+        if collect_for_email:
+            return {
+                "symbol": symbol,
+                "signal": signal,
+                "details": details,
+                "description": SYMBOL_CONFIGURATIONS.get(symbol, DEFAULT_CONFIGURATION)["description"],
+                "buy_threshold": buy_threshold,
+                "sell_threshold": sell_threshold,
+                "transitions": transitions
+            }
         
     except Exception as e:
-        print(f"❌ Error analyzing {symbol}: {e}")
+        if not collect_for_email:
+            print(f"❌ Error analyzing {symbol}: {e}")
+        return None
+
+
+def send_trading_signals_email():
+    """Send trading signals via email using Brevo"""
+    print("📧 PREPARING EMAIL NOTIFICATION")
+    print("=" * 40)
+    
+    try:
+        # Initialize email notifier
+        email_notifier = EmailNotifier()
+        
+        if not email_notifier.enabled:
+            print("❌ Email notifications are not enabled")
+            print("   To enable emails, set these environment variables:")
+            print("   - BREVO_API_KEY: Your Brevo API key")
+            print("   - SENDER_EMAIL: Your verified sender email")
+            print("   - RECIPIENT_EMAIL: Email to receive notifications")
+            print("   - EMAIL_ENABLED: Set to 'true'")
+            return False
+        
+        print(f"✅ Email notifications enabled")
+        print(f"   From: {email_notifier.sender_name} <{email_notifier.sender_email}>")
+        print(f"   To: {email_notifier.recipient_email}")
+        
+        # Collect signals data for all symbols
+        print(f"\n📊 Collecting signals data...")
+        signals_data = production_signals_summary(collect_for_email=True)
+        
+        if not signals_data:
+            print("❌ No signals data collected")
+            return False
+        
+        print(f"✅ Collected data for {len(signals_data)} symbols")
+        
+        # Count signals by type for preview
+        signal_counts = {"BUY": 0, "SELL": 0, "HOLD": 0}
+        for signal_data in signals_data:
+            signal = signal_data.get("signal", "HOLD")
+            signal_counts[signal] += 1
+        
+        print(f"   📈 BUY: {signal_counts['BUY']} symbols")
+        print(f"   📉 SELL: {signal_counts['SELL']} symbols")
+        print(f"   ⏸️ HOLD: {signal_counts['HOLD']} symbols")
+        
+        # Send email
+        print(f"\n📤 Sending email...")
+        success = email_notifier.send_trading_signals_email(signals_data)
+        
+        if success:
+            print(f"✅ Trading signals email sent successfully!")
+            return True
+        else:
+            print(f"❌ Failed to send email")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error preparing email: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 if __name__ == "__main__":
-    """Run the production signals summary"""
+    """Run the production signals summary with optional email notifications"""
     
     try:
-        # Production summary (clean and fast)
-        production_signals_summary()
+        # Check if email should be sent (based on command line argument or environment variable)
+        send_email = len(sys.argv) > 1 and sys.argv[1].lower() in ['email', '--email', '-e']
+        send_email = send_email or os.getenv("SEND_EMAIL", "false").lower() == "true"
         
-        print(f"\n✅ Production signals summary completed!")
+        if send_email:
+            print("📧 EMAIL MODE: Generating signals and sending email notification")
+            print("=" * 60)
+            
+            # Send email with signals
+            email_success = send_trading_signals_email()
+            
+            if email_success:
+                print(f"\n✅ Email notification sent successfully!")
+            else:
+                print(f"\n❌ Email notification failed")
+                # Still run console summary as fallback
+                print(f"\n📊 FALLBACK: Running console summary...")
+                production_signals_summary()
+        else:
+            print("📊 CONSOLE MODE: Displaying signals summary")
+            print("=" * 50)
+            print("💡 Tip: Run with 'email' argument or set SEND_EMAIL=true to send email notifications")
+            print()
+            
+            # Production summary (clean and fast)
+            production_signals_summary()
+        
+        print(f"\n✅ Analysis completed!")
         
     except KeyboardInterrupt:
         print(f"\n⏹️ Analysis interrupted by user")
