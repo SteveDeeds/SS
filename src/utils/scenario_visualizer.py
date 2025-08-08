@@ -191,18 +191,21 @@ class ScenarioVisualizer:
             ax.add_patch(rect)
     
     def _add_order_markers(self, ax, scenario_data, orders: List[Order], dates):
-        """Add buy/sell order markers to the chart"""
+        """Add buy/sell order markers to the chart with proper limit order visualization"""
         if not orders:
             return
         if DEBUG:
             print(f"🔍 DEBUG: Processing {len(orders)} orders for markers")
         
-        buy_orders = []
-        sell_orders = []
+        # Separate orders by type and fill status
+        filled_buy_orders = []      # Solid green diamonds
+        filled_sell_orders = []     # Solid red diamonds
+        unfilled_buy_orders = []    # Hollow green diamonds (limit orders not filled)
+        unfilled_sell_orders = []   # Hollow red diamonds (limit orders not filled)
         
         for order in orders:
             if DEBUG:
-                print(f"📋 Processing order: Type={order.type}, Symbol={order.symbol}, Qty={order.quantity}")
+                print(f"📋 Processing order: Type={order.type}, Symbol={order.symbol}, Qty={order.quantity}, Status={order.status}")
             
             # Get order placement time - this should align with scenario dates
             placement_time = order.datetime_placed
@@ -229,34 +232,71 @@ class ScenarioVisualizer:
                 # Match by date (ignore time for daily data)
                 if day_date.date() == placement_time.date():
                     best_match_date = day_date
-                    # Use execution price if available, otherwise use close price of that day
-                    best_match_price = order.execution_price or day['close']
+                    
+                    # Determine price based on order type and fill status
+                    if order.status == 'FILLED' and order.execution_price:
+                        # Use actual execution price for filled orders
+                        best_match_price = order.execution_price
+                    elif order.limit_price and ('LIMIT' in order.type):
+                        # Use limit price for limit orders (filled or unfilled)
+                        best_match_price = order.limit_price
+                    else:
+                        # Fall back to market price for market orders
+                        best_match_price = day['close']
                     break
             
             if best_match_date and best_match_price:
                 if DEBUG:
-                    print(f"✅ Matched order to {best_match_date.strftime('%Y-%m-%d')} at ${best_match_price:.2f}")
+                    print(f"✅ Matched order to {best_match_date.strftime('%Y-%m-%d')} at ${best_match_price:.2f}, Status: {order.status}")
+                
+                # Categorize orders by type and fill status
+                is_filled = (order.status == 'FILLED')
+                
                 if 'BUY' in order.type:
-                    buy_orders.append((best_match_date, best_match_price))
+                    if is_filled:
+                        filled_buy_orders.append((best_match_date, best_match_price))
+                    else:
+                        unfilled_buy_orders.append((best_match_date, best_match_price))
                 elif 'SELL' in order.type:
-                    sell_orders.append((best_match_date, best_match_price))
+                    if is_filled:
+                        filled_sell_orders.append((best_match_date, best_match_price))
+                    else:
+                        unfilled_sell_orders.append((best_match_date, best_match_price))
             else:
                 print(f"❌ Could not match order placed on {placement_time.strftime('%Y-%m-%d')} to scenario data")
         
-        print(f"📊 Final counts: {len(buy_orders)} buy orders, {len(sell_orders)} sell orders")
+        # Count totals for logging
+        total_buy = len(filled_buy_orders) + len(unfilled_buy_orders)
+        total_sell = len(filled_sell_orders) + len(unfilled_sell_orders)
+        print(f"📊 Final counts: {total_buy} buy orders ({len(filled_buy_orders)} filled, {len(unfilled_buy_orders)} unfilled), {total_sell} sell orders ({len(filled_sell_orders)} filled, {len(unfilled_sell_orders)} unfilled)")
         
-        # Plot order markers
-        if buy_orders:
-            buy_dates, buy_prices = zip(*buy_orders)
+        # Plot filled order markers (solid diamonds)
+        if filled_buy_orders:
+            buy_dates, buy_prices = zip(*filled_buy_orders)
             ax.scatter(buy_dates, buy_prices, color=self.colors['buy_marker'], 
-                      marker='D', s=100, label=f'BUY Orders ({len(buy_orders)})', 
+                      marker='D', s=50, label=f'BUY Orders Filled ({len(filled_buy_orders)})', 
                       edgecolor='black', linewidth=1, zorder=5)
         
-        if sell_orders:
-            sell_dates, sell_prices = zip(*sell_orders)
+        if filled_sell_orders:
+            sell_dates, sell_prices = zip(*filled_sell_orders)
             ax.scatter(sell_dates, sell_prices, color=self.colors['sell_marker'], 
-                      marker='D', s=100, label=f'SELL Orders ({len(sell_orders)})', 
+                      marker='D', s=50, label=f'SELL Orders Filled ({len(filled_sell_orders)})', 
                       edgecolor='black', linewidth=1, zorder=5)
+        
+        # Plot unfilled order markers (hollow diamonds)
+        if unfilled_buy_orders:
+            buy_dates, buy_prices = zip(*unfilled_buy_orders)
+            ax.scatter(buy_dates, buy_prices, facecolors='none', 
+                      edgecolors=self.colors['buy_marker'], linewidth=2,
+                      marker='D', s=50, label=f'BUY Orders Unfilled ({len(unfilled_buy_orders)})', 
+                      zorder=5)
+        
+        if unfilled_sell_orders:
+            sell_dates, sell_prices = zip(*unfilled_sell_orders)
+            ax.scatter(sell_dates, sell_prices, facecolors='none', 
+                      edgecolors=self.colors['sell_marker'], linewidth=2,
+                      marker='D', s=50, label=f'SELL Orders Unfilled ({len(unfilled_sell_orders)})', 
+                      zorder=5)
     
     def _synchronize_x_axis(self, ax_price, ax_portfolio, price_dates, portfolio_dates):
         """Synchronize x-axis limits for both charts using common date range"""

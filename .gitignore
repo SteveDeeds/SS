@@ -3,3 +3,6 @@ results/
 src/data/__pycache__/
 src/optimizer/data/
 src/data/__pycache__/
+*.pyc
+src/optimizer/__pycache__/
+src/utils/__pycache__/
