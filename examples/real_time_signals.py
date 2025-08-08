@@ -69,6 +69,16 @@ SYMBOL_CONFIGURATIONS = {
             'cash_percentage': 0.15
         },
         "description": "YieldMax NVDA Option Income Strategy ETF"
+    },
+    "IWMY": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 22,
+            'oversold_threshold': 38.0,
+            'overbought_threshold': 68.0,
+            'cash_percentage': 0.15
+        },
+        "description": "Defiance R2000 Target 30 Income ETF"
     }    
 }
 
@@ -86,7 +96,7 @@ DEFAULT_CONFIGURATION = {
 
 # Global settings
 GLOBAL_SETTINGS = {
-    "data_period": "2y",  # How much historical data to load
+    "data_period": "1y",  # How much historical data to load
     "analysis_days": 30,  # Days to analyze for signal distribution
     "force_download": False,  # Whether to force fresh data download
     "test_price_adjustment": 0.95  # Multiplier for custom price testing (5% lower)
@@ -623,26 +633,7 @@ def production_signals_summary(symbol=None):
             })
             signal_counts[scenario_signal] += 1
         
-        # KEY THRESHOLDS
-        print(f"\n🎯 KEY THRESHOLDS (0.1% precision):")
-        
-        # Find BUY thresholds
-        buy_scenarios = [s for s in scenario_results if s['signal'] == 'BUY']
-        if buy_scenarios:
-            min_buy = min(buy_scenarios, key=lambda x: x['change_pct'])
-            print(f"   📈 BUY: {min_buy['change_pct']:+5.1f}% (${min_buy['price']:.2f})")
-        else:
-            print(f"   📈 BUY: None in range")
-        
-        # Find SELL thresholds
-        sell_scenarios = [s for s in scenario_results if s['signal'] == 'SELL']
-        if sell_scenarios:
-            min_sell = min(sell_scenarios, key=lambda x: x['change_pct'])
-            print(f"   📉 SELL: {min_sell['change_pct']:+5.1f}% (${min_sell['price']:.2f})")
-        else:
-            print(f"   📉 SELL: None in range")
-        
-        # Find precise transition points
+        # Find precise transition points first
         transitions = []
         for i in range(1, len(scenario_results)):
             prev_signal = scenario_results[i-1]['signal']
@@ -650,14 +641,37 @@ def production_signals_summary(symbol=None):
             
             if prev_signal != curr_signal:
                 curr_change = scenario_results[i]['change_pct']
+                curr_price = scenario_results[i]['price']
                 transitions.append({
                     'from': prev_signal,
                     'to': curr_signal,
-                    'change': curr_change
+                    'change': curr_change,
+                    'price': curr_price
                 })
         
+        # KEY THRESHOLDS - Based on actual transition points
+        print(f"\n🎯 KEY THRESHOLDS (0.1% precision):")
+        
+        # Find BUY threshold - last transition TO BUY (most restrictive entry point)
+        buy_transitions = [t for t in transitions if t['from'] == 'BUY']
+        if buy_transitions:
+            # Get the transition point closest to current price (highest percentage for BUY)
+            buy_threshold = max(buy_transitions, key=lambda x: x['change'])
+            print(f"   📈 BUY: {buy_threshold['change']:+5.1f}% (${buy_threshold['price']:.2f})")
+        else:
+            print(f"   📈 BUY: None in range")
+        
+        # Find SELL threshold - first transition TO SELL (most restrictive exit point)  
+        sell_transitions = [t for t in transitions if t['to'] == 'SELL']
+        if sell_transitions:
+            # Get the transition point closest to current price (lowest percentage for SELL)
+            sell_threshold = min(sell_transitions, key=lambda x: x['change'])
+            print(f"   📉 SELL: {sell_threshold['change']:+5.1f}% (${sell_threshold['price']:.2f})")
+        else:
+            print(f"   📉 SELL: None in range")
+        
         if transitions:
-            print(f"   🔄 Transitions:")
+            print(f"   🔄 All Transitions:")
             for t in transitions:
                 print(f"      {t['from']}→{t['to']} at {t['change']:+5.1f}%")
         
