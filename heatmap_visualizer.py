@@ -15,7 +15,14 @@ import seaborn as sns
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import os
+import sys
 from typing import Dict, List, Optional, Tuple
+
+# Add project root to path for imports
+project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(project_root)
+
+from src.utils.heatmap_generator import HeatMapGeneratorGUI
 
 
 class HeatMapVisualizer:
@@ -27,6 +34,9 @@ class HeatMapVisualizer:
         self.root = root
         self.root.title("Optimization Results Heat Map Visualizer")
         self.root.geometry("1200x800")
+        
+        # Heat map generator
+        self.heatmap_generator = HeatMapGeneratorGUI()
         
         # Data storage
         self.df = None
@@ -174,20 +184,18 @@ class HeatMapVisualizer:
     def load_csv_data(self, file_path: str):
         """Load and process CSV data"""
         try:
-            self.df = pd.read_csv(file_path)
+            # Load data using the heat map generator
+            if not self.heatmap_generator.load_data(file_path):
+                raise Exception("Failed to load data with heat map generator")
+            
+            self.df = self.heatmap_generator.data
             self.file_label.config(text=f"Loaded: {os.path.basename(file_path)}", foreground="green")
             
-            # Extract available values for filters
-            self.available_strategies = ["All"] + sorted(self.df['strategy_file'].unique().tolist())
-            self.available_symbols = ["All"] + sorted(self.df['symbol'].unique().tolist())
-            
-            # Find parameter columns
-            self.available_params = [col.replace('param_', '') for col in self.df.columns if col.startswith('param_')]
-            
-            # Find metric columns (exclude specific columns and param columns)
-            excluded_columns = {'datetime', 'strategy_file', 'strategy_name', 'symbol', 'parameter_combination'}
-            available_metrics = [col for col in self.df.columns 
-                               if col not in excluded_columns and not col.startswith('param_')]
+            # Get available values from the generator
+            self.available_strategies = ["All"] + self.heatmap_generator.get_available_strategies()
+            self.available_symbols = ["All"] + self.heatmap_generator.get_available_symbols()
+            self.available_params = self.heatmap_generator.get_available_parameters()
+            available_metrics = self.heatmap_generator.get_available_metrics()
             
             # Update UI
             self.strategy_combo['values'] = self.available_strategies
@@ -357,88 +365,25 @@ class HeatMapVisualizer:
             return
         
         try:
-            # Prepare data
-            x_col = f'param_{x_param}'
-            y_col = f'param_{y_param}'
-            metric_col = self.metric_var.get()
+            # Load the current filtered data into the generator
+            self.heatmap_generator.load_data(self.filtered_df)
             
-            if x_col not in self.filtered_df.columns or y_col not in self.filtered_df.columns:
-                messagebox.showerror("Error", "Selected parameters not found in data")
-                return
-            
-            if metric_col not in self.filtered_df.columns:
-                messagebox.showerror("Error", f"Metric '{metric_col}' not found in data")
-                return
-            
-            # Convert to numeric and drop NaN values
-            plot_data = self.filtered_df[[x_col, y_col, metric_col]].copy()
-            plot_data[x_col] = pd.to_numeric(plot_data[x_col], errors='coerce')
-            plot_data[y_col] = pd.to_numeric(plot_data[y_col], errors='coerce')
-            plot_data[metric_col] = pd.to_numeric(plot_data[metric_col], errors='coerce')
-            plot_data = plot_data.dropna()
-            
-            if len(plot_data) == 0:
-                messagebox.showwarning("Warning", "No valid numeric data for selected parameters")
-                return
-            
-            # Create pivot table for heat map with appropriate aggregation
-            # Use sum for test_scenarios, mean for all other metrics
-            aggfunc = 'sum' if metric_col == 'test_scenarios' else 'mean'
-            
-            pivot_table = plot_data.pivot_table(
-                index=y_col, 
-                columns=x_col, 
-                values=metric_col, 
-                aggfunc=aggfunc
+            # Use the GUI-specific method to generate the heat map on our figure
+            success = self.heatmap_generator.generate_heatmap_on_figure(
+                fig=self.fig,
+                x_param=x_param,
+                y_param=y_param,
+                metric=self.metric_var.get(),
+                colormap=self.colormap_var.get()
             )
             
-            # Clear figure and axes completely
-            self.fig.clear()
-            self.ax = self.fig.add_subplot(111)
-            
-            # Determine appropriate decimal places based on data range
-            data_min = pivot_table.min().min()
-            data_max = pivot_table.max().max()
-            data_range = max(abs(data_min), abs(data_max))
-            
-            if data_range < 10:
-                fmt = '.2f'  # 2 decimal places for small numbers (-10 to 10)
-            elif data_range < 100:
-                fmt = '.1f'  # 1 decimal places for medium-small numbers (-100 to 100)
+            if success:
+                # Update the axes reference after clearing/recreating
+                self.ax = self.fig.axes[0] if self.fig.axes else None
+                self.canvas.draw()
+                self.status_var.set(f"Heat map generated successfully")
             else:
-                fmt = '.0f'  # No decimal places for large numbers
-            
-            # Create symmetric range around zero for better color distinction
-            data_abs_max = max(abs(data_min), abs(data_max))
-            vmin = -data_abs_max
-            vmax = data_abs_max
-            center = 0
-            
-            sns.heatmap(
-                pivot_table, 
-                ax=self.ax, 
-                annot=True, 
-                fmt=fmt, 
-                cmap=self.colormap_var.get(),
-                center=center,
-                vmin=vmin,
-                vmax=vmax
-            )
-            
-            # Set labels and title
-            self.ax.set_xlabel(f'{x_param.title()}')
-            self.ax.set_ylabel(f'{y_param.title()}')
-            self.ax.set_title(f'{metric_col.replace("_", " ").title()} Heat Map\n'
-                             f'{x_param.title()} vs {y_param.title()}')
-            
-            # Rotate labels for better readability
-            self.ax.tick_params(axis='x', rotation=45)
-            self.ax.tick_params(axis='y', rotation=0)
-            
-            self.fig.tight_layout()
-            self.canvas.draw()
-            
-            self.status_var.set(f"Heat map generated with {len(plot_data)} data points")
+                self.status_var.set("Error generating heat map")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate heat map: {str(e)}")

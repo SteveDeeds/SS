@@ -26,6 +26,8 @@ import glob
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
+from src.utils.strategy_heatmap_analyzer import StrategyHeatMapAnalyzer
+
 
 class OptimalStrategyFinder:
     """
@@ -70,6 +72,8 @@ class OptimalStrategyFinder:
         for csv_file in csv_files:
             try:
                 df = pd.read_csv(csv_file)
+                # Add source file information
+                df['source_file'] = csv_file.name
                 print(f"   ✅ {csv_file.name}: {len(df)} rows")
                 all_data.append(df)
             except Exception as e:
@@ -240,7 +244,7 @@ class OptimalStrategyFinder:
         except Exception as e:
             print(f"❌ Error exporting results: {e}")
     
-    def run_analysis(self, top_n: int = 10, export: bool = True, detailed: bool = True):
+    def run_analysis(self, top_n: int = 10, export: bool = True, detailed: bool = True, generate_heatmaps: bool = True):
         """
         Run complete analysis workflow.
         
@@ -248,6 +252,7 @@ class OptimalStrategyFinder:
             top_n: Number of top strategies to find
             export: Whether to export results to CSV
             detailed: Whether to show detailed information
+            generate_heatmaps: Whether to generate parameter space heat maps
         """
         print("🚀 OPTIMAL STRATEGY FINDER")
         print("=" * 80)
@@ -282,6 +287,68 @@ class OptimalStrategyFinder:
                 best_per_symbol = pd.concat(symbol_analysis.values(), ignore_index=True)
                 self.export_results(best_per_symbol, "best_strategy_per_symbol.csv")
         
+        # Generate heat maps for optimal strategies
+        if generate_heatmaps and not optimal_strategies.empty:
+            print(f"\n🎨 GENERATING PARAMETER SPACE HEAT MAPS")
+            print("=" * 80)
+            
+            try:
+                # Create heat map analyzer
+                heatmap_analyzer = StrategyHeatMapAnalyzer(output_folder="strategy_heatmaps")
+                
+                # Generate heat maps for best strategy per symbol instead of top overall strategies
+                if symbol_analysis:
+                    print(f"🎯 GENERATING HEAT MAPS FOR BEST STRATEGY PER SYMBOL")
+                    print("=" * 60)
+                    
+                    best_per_symbol = pd.concat(symbol_analysis.values(), ignore_index=True)
+                    print(f"📊 Analyzing {len(best_per_symbol)} symbol-specific optimal strategies")
+                    
+                    heatmap_results = heatmap_analyzer.analyze_top_strategies(
+                        top_strategies_df=best_per_symbol,
+                        results_folder="results",
+                        max_strategies=len(best_per_symbol),  # Analyze all symbol strategies
+                        metrics=['return_on_avg_invested_capital', 'percentile_25th_return']
+                    )
+                else:
+                    # Fallback to top overall strategies if no symbol analysis available
+                    print(f"🏆 GENERATING HEAT MAPS FOR TOP {min(3, len(optimal_strategies))} OVERALL STRATEGIES")
+                    print("=" * 60)
+                    
+                    max_heatmap_strategies = min(3, len(optimal_strategies))
+                    
+                    heatmap_results = heatmap_analyzer.analyze_top_strategies(
+                        top_strategies_df=optimal_strategies,
+                        results_folder="results",
+                        max_strategies=max_heatmap_strategies,
+                        metrics=['return_on_avg_invested_capital', 'percentile_25th_return']
+                    )
+                
+                if heatmap_results:
+                    # Create summary report using appropriate DataFrame
+                    strategies_for_report = (best_per_symbol if symbol_analysis 
+                                           else optimal_strategies.head(max_heatmap_strategies))
+                    
+                    report_path = heatmap_analyzer.create_summary_report(
+                        analysis_results=heatmap_results,
+                        top_strategies_df=strategies_for_report
+                    )
+                    
+                    total_files = sum(len(files) for strategy_results in heatmap_results.values() 
+                                    for files in strategy_results.values())
+                    
+                    analysis_type = "symbol-specific" if symbol_analysis else "top overall"
+                    print(f"\n✅ Heat map analysis completed for {analysis_type} strategies!")
+                    print(f"📁 Generated {total_files} heat map files in 'strategy_heatmaps/' folder")
+                    print(f"📋 Summary report: {Path(report_path).name}")
+                else:
+                    print(f"⚠️ No heat maps generated - check data availability")
+                    
+            except Exception as e:
+                print(f"❌ Heat map generation failed: {e}")
+                import traceback
+                traceback.print_exc()
+        
         # Summary statistics
         print(f"\n📊 SUMMARY STATISTICS")
         print("=" * 50)
@@ -296,6 +363,14 @@ class OptimalStrategyFinder:
             print(f"   Average Return: {qualified_strategies['average_return'].mean():.4f} ± {qualified_strategies['average_return'].std():.4f}")
             print(f"   Win Rate: {qualified_strategies['win_rate'].mean():.3f} ± {qualified_strategies['win_rate'].std():.3f}")
             print(f"   Sharpe Ratio: {qualified_strategies['sharpe_ratio'].mean():.3f} ± {qualified_strategies['sharpe_ratio'].std():.3f}")
+        
+        # Return results for further analysis if needed
+        return {
+            'all_results': all_results,
+            'qualified_strategies': qualified_strategies,
+            'optimal_strategies': optimal_strategies,
+            'symbol_analysis': symbol_analysis
+        }
 
 
 def demo_basic_analysis():
@@ -304,7 +379,7 @@ def demo_basic_analysis():
     print("=" * 60)
     
     finder = OptimalStrategyFinder()
-    finder.run_analysis(top_n=5, detailed=False)
+    finder.run_analysis(top_n=5, detailed=False, generate_heatmaps=False)
 
 
 def demo_detailed_analysis():
@@ -313,7 +388,23 @@ def demo_detailed_analysis():
     print("=" * 60)
     
     finder = OptimalStrategyFinder()
-    finder.run_analysis(top_n=10, export=True, detailed=True)
+    finder.run_analysis(top_n=10, export=True, detailed=True, generate_heatmaps=False)
+
+
+def demo_heatmap_analysis():
+    """Demonstrate analysis with heat map generation"""
+    print("🎨 HEAT MAP STRATEGY ANALYSIS")
+    print("=" * 60)
+    
+    finder = OptimalStrategyFinder()
+    results = finder.run_analysis(top_n=5, export=True, detailed=True, generate_heatmaps=True)
+    
+    if results and results['optimal_strategies'] is not None and not results['optimal_strategies'].empty:
+        print(f"\n🎨 Heat maps generated for parameter space visualization!")
+        print(f"📁 Check the 'strategy_heatmaps/' folder for generated plots")
+        print(f"📊 Sequential parameter pairs analyzed based on column order")
+    
+    return results
 
 
 def demo_custom_analysis():
@@ -354,8 +445,8 @@ if __name__ == "__main__":
             print("   Make sure you have run optimization scripts first")
             sys.exit(1)
         
-        # Run detailed analysis by default
-        demo_detailed_analysis()
+        # Run heat map analysis by default (includes detailed analysis)
+        demo_heatmap_analysis()
         
         print(f"\n✅ Optimal strategy analysis completed!")
         
