@@ -70,7 +70,7 @@ std_negative_values = [1.0, 1.5, 2.0, 2.5, 3.0]  # Standard deviations for lower
 cash_percentages = [0.10]
 
 # List of stocks to analyze
-symbols = ["IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY", "NVDY"]
+symbols = ["IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY", "NVDY", "SPXL"]
 
 
 def multi_stock_bollinger_bands_optimization_demo():
@@ -87,9 +87,6 @@ def multi_stock_bollinger_bands_optimization_demo():
     # Create results directory
     os.makedirs("results", exist_ok=True)
     
-    # Create timing log file
-    timing_log_file = "results/bollinger_bands_optimization_timing_log.txt"
-    
     # Initialize optimizer
     optimizer = GridSearchOptimizer("strategies/bollinger_bands_strategy.py")
 
@@ -103,14 +100,7 @@ def multi_stock_bollinger_bands_optimization_demo():
     print(f"   Total combinations per stock: {len(periods) * len(std_positive_values) * len(std_negative_values) * len(cash_percentages)}")
     print(f"   Simulations per combination: 100")
     print(f"   Exploration order: Sequential by stock")
-    print(f"   Timing log: {timing_log_file}")
     print()
-    
-    # Initialize timing log
-    with open(timing_log_file, 'w') as log_file:
-        log_file.write("=== BOLLINGER BANDS OPTIMIZATION TIMING LOG ===\n")
-        log_file.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        log_file.write("Format: [Timestamp] Symbol Combo# period=X std_pos=Y std_neg=Z cash=W -> Duration: Xs ROAIC: Y%\n\n")
     
     # Pre-load data for all symbols to ensure proper caching
     print("📥 Pre-loading data for all symbols to ensure cache consistency...")
@@ -150,10 +140,6 @@ def multi_stock_bollinger_bands_optimization_demo():
             
             # Run through all combinations for this stock
             for combination_num, (period, std_pos, std_neg, cash_pct) in enumerate(all_combinations, 1):
-                # Record start time for this combination
-                start_time = time.time()
-                start_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                
                 # Create a small parameter grid for this combination
                 parameter_grid = {
                     'period': [period],
@@ -174,27 +160,15 @@ def multi_stock_bollinger_bands_optimization_demo():
                     export_csv=False  # We'll handle CSV export manually
                 )
                 
-                # Calculate duration
-                end_time = time.time()
-                duration = end_time - start_time
-                
                 # Append results to CSV file for this stock
                 optimizer.export_to_csv(results, output_csv, append_mode=True)
                 
                 # Show progress
                 roaic = results['best_strategy']['roaic']
                 if roaic is not None:
-                    roaic_str = f"{roaic:.2%}"
-                    print(f"   ✅ ROAIC: {roaic_str} (Duration: {duration:.1f}s)")
+                    print(f"   ✅ ROAIC: {roaic:.2%}")
                 else:
-                    roaic_str = "None"
-                    print(f"   ✅ ROAIC: None (no valid trades) (Duration: {duration:.1f}s)")
-                
-                # Log timing information
-                with open(timing_log_file, 'a') as log_file:
-                    log_file.write(f"[{start_timestamp}] {symbol} Combo#{combination_num} "
-                                 f"period={period} std_pos={std_pos} std_neg={std_neg} cash={cash_pct} -> "
-                                 f"Duration: {duration:.1f}s ROAIC: {roaic_str}\n")
+                    print(f"   ✅ ROAIC: None (no valid trades)")
                 
                 total_combinations += 1
                 
@@ -215,22 +189,11 @@ def multi_stock_bollinger_bands_optimization_demo():
     
     except KeyboardInterrupt:
         print(f"\n⏹️ Optimization stopped by user after {total_combinations} combinations")
-        # Log interruption
-        with open(timing_log_file, 'a') as log_file:
-            log_file.write(f"\n!!! INTERRUPTED by user at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} !!!\n")
     
     print(f"\n🎉 Multi-stock optimization session completed!")
     print(f"   Total combinations tested: {total_combinations}")
     print(f"   Stocks analyzed: {stock_num if 'stock_num' in locals() else len(symbols)}")
     print(f"   Results files in results/ directory")
-    print(f"   Timing log: {timing_log_file}")
-    
-    # Log session completion
-    with open(timing_log_file, 'a') as log_file:
-        log_file.write(f"\n=== SESSION COMPLETED at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
-        log_file.write(f"Total combinations tested: {total_combinations}\n")
-        if 'stock_num' in locals():
-            log_file.write(f"Stocks completed: {stock_num}/{len(symbols)}\n")
     
     # Show summary of all generated files
     print(f"\n📋 Generated Results Files:")
@@ -242,46 +205,6 @@ def multi_stock_bollinger_bands_optimization_demo():
             print(f"   {symbol}: {output_csv} ({len(lines)} lines)")
         else:
             print(f"   {symbol}: No results file generated")
-    
-    # Show timing log summary
-    if os.path.exists(timing_log_file):
-        print(f"\n⏱️  TIMING ANALYSIS:")
-        with open(timing_log_file, 'r') as f:
-            lines = f.readlines()
-        
-        # Extract duration information from log
-        durations = []
-        for line in lines:
-            if "Duration:" in line:
-                try:
-                    # Extract duration from "Duration: X.Xs"
-                    duration_part = line.split("Duration: ")[1].split("s")[0]
-                    durations.append(float(duration_part))
-                except (IndexError, ValueError):
-                    continue
-        
-        if durations:
-            avg_duration = sum(durations) / len(durations)
-            min_duration = min(durations)
-            max_duration = max(durations)
-            
-            print(f"   Average time per combination: {avg_duration:.1f}s")
-            print(f"   Fastest combination: {min_duration:.1f}s")
-            print(f"   Slowest combination: {max_duration:.1f}s")
-            print(f"   Total logged combinations: {len(durations)}")
-            
-            # Estimate remaining time if not all stocks completed
-            if 'stock_num' in locals() and stock_num < len(symbols):
-                remaining_stocks = len(symbols) - stock_num
-                combinations_per_stock = len(periods) * len(std_positive_values) * len(std_negative_values) * len(cash_percentages)
-                remaining_combinations = remaining_stocks * combinations_per_stock
-                estimated_remaining_time = remaining_combinations * avg_duration
-                
-                hours = int(estimated_remaining_time // 3600)
-                minutes = int((estimated_remaining_time % 3600) // 60)
-                print(f"   Estimated time for remaining stocks: {hours}h {minutes}m")
-        
-        print(f"   Detailed timing log: {timing_log_file}")
 
 
 def analyze_multi_stock_bollinger_bands_results():
@@ -362,7 +285,7 @@ def analyze_multi_stock_bollinger_bands_results():
     all_best_results = []
     
     for symbol in symbols:
-        output_csv = f"results/rsi_optimization_{symbol}_results.csv"
+        output_csv = f"results/bollinger_bands_optimization_{symbol}_results.csv"
         
         if not os.path.exists(output_csv):
             continue
