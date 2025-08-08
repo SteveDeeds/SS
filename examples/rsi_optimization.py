@@ -3,23 +3,6 @@
 RSI Strategy Continuous Optimization Demo
 
 This example demonstrates how to run RSI strategy optimization continuously                 # Show CSV file status every 20 combinations
-                if combination_num % 20 == 0:
-                    print(f"📄 CSV Update: {combination_num}/{len(all_combinations)} combinations for {symbol}")
-                    if os.path.exists(output_csv):
-                        with open(output_csv, 'r') as f:
-                            lines = f.readlines()
-                        print(f"   File contains {len(lines)} lines (including header)")
-                    
-                    # Show timing statistics for last 20 combinations
-                    print(f"   ⏱️  Last combination took {duration:.1f}s")
-            
-            print(f"\n✅ {symbol} completed! ({len(all_combinations)} combinations)")
-            print(f"   Results saved to: {output_csv}")
-            print(f"📊 Total combinations tested so far: {total_combinations}")
-            
-            # Log stock completion
-            with open(timing_log_file, 'a') as log_file:
-                log_file.write(f"\n--- {symbol} COMPLETED at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
 constantly updating a CSV file with results. Each parameter combination
 gets added as a new row to enable real-time monitoring of optimization progress.
 
@@ -67,10 +50,10 @@ MAIN_DATA_DIR = setup_data_directory()
 rsi_periods = range(10, 30, 2)  # RSI period: 10, 12, 14, 16, 18, 20, 22, 24, 26, 28
 oversold_thresholds = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]  # Oversold threshold
 overbought_thresholds = [60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0]  # Overbought threshold
-cash_percentages = [0.10, 0.15, 0.20, 0.25]
+cash_percentages = [0.10]
 
 # List of stocks to analyze
-symbols = ["NVDY", "IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY"]
+symbols = ["YMAX", "MSFT", "MSTY", "ULTY", "NVDY","IWMY", "AMDY"]
 
 
 def multi_stock_rsi_optimization_demo():
