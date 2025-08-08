@@ -66,7 +66,7 @@ class GridSearchOptimizer(BaseOptimizer):
         
         # Get historical data
         # print(f"\n📊 Step 1: Loading data for {symbol}...")
-        historical_data = get_symbol_data(symbol, period="2y")
+        historical_data = get_symbol_data(symbol, period="1y")
         if not historical_data:
             raise ValueError(f"Failed to load data for {symbol}")
         print(f"✅ Loaded {len(historical_data)} days of data")
