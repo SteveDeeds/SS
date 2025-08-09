@@ -7,3 +7,7 @@ src/data/__pycache__/
 src/optimizer/__pycache__/
 src/utils/__pycache__/
 src/optimizer/__pycache__/
+strategy_heatmaps/
+src/orders/__pycache__/
+src/portfolio/__pycache__/
+*.pyc
