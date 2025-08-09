@@ -23,6 +23,8 @@ sys.path.append(project_root)
 # Import from src infrastructure
 from src.data.loader import get_symbol_data, download_symbol_data
 from strategies.rsi_strategy import RSIStrategy
+from strategies.adaptive_ma_crossover import AdaptiveMAStrategy
+from strategies.bollinger_bands_strategy import BollingerBandsStrategy
 
 # Email functionality
 import sib_api_v3_sdk
@@ -34,6 +36,56 @@ from sib_api_v3_sdk.rest import ApiException
 
 # Define strategies and parameters for each symbol
 SYMBOL_CONFIGURATIONS = {
+    "IWMY": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 22,
+            'oversold_threshold': 38.0,
+            'overbought_threshold': 68.0,
+            'cash_percentage': 0.15
+        },
+        "description": "RSI Defiance R2000 Target 30 Income ETF"
+    },
+    "IWMY": {
+        "strategy_class": BollingerBandsStrategy,
+        "strategy_params": {
+            'period': 30,
+            'std_positive': 1.5,
+            'std_negative': 2.0,
+            'cash_percentage': 0.15
+        },
+        "description": "Bollinger Bands - Defiance R2000 Target 30 Income ETF"
+    },    
+    "MSFT": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 22,
+            'oversold_threshold': 35.0,
+            'overbought_threshold': 60.0,
+            'cash_percentage': 0.15
+        },
+        "description": "Microsoft Corporation"
+    },    
+    "MSTY": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 14,
+            'oversold_threshold': 27.0,
+            'overbought_threshold': 69.0,
+            'cash_percentage': 0.15
+        },
+        "description": "Yieldmax MSTR Option Income Strategy ETF"
+    },        
+    "NVDY": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 12,
+            'oversold_threshold': 25.0,
+            'overbought_threshold': 60.0,
+            'cash_percentage': 0.15
+        },
+        "description": "YieldMax NVDA Option Income Strategy ETF"
+    },
     "SDIV": {
         "strategy_class": RSIStrategy,
         "strategy_params": {
@@ -44,16 +96,6 @@ SYMBOL_CONFIGURATIONS = {
         },
         "description": "Global X SuperDividend ETF"
     },
-    "MSTY": {
-        "strategy_class": RSIStrategy,
-        "strategy_params": {
-            'rsi_period': 14,
-            'oversold_threshold': 27.0,
-            'overbought_threshold': 69.0,
-            'cash_percentage': 0.15
-        },
-        "description": "Yieldmax MSTR Option Income Strategy ETF"
-    },    
     "SPXL": {
         "strategy_class": RSIStrategy,
         "strategy_params": {
@@ -64,26 +106,28 @@ SYMBOL_CONFIGURATIONS = {
         },
         "description": "Direxion Daily S&P 500 Bull 3X Shares"
     },
-    "NVDY": {
-        "strategy_class": RSIStrategy,
+    "ULTY": {
+        "strategy_class": AdaptiveMAStrategy,
         "strategy_params": {
-            'rsi_period': 12,
-            'oversold_threshold': 34.0,
-            'overbought_threshold': 67.0,
+            'buy_slow_period': 13,
+            'buy_fast_period': 5,
+            'sell_slow_period': 13,
+            'sell_fast_period': 5,
             'cash_percentage': 0.15
         },
-        "description": "YieldMax NVDA Option Income Strategy ETF"
+        "description": "YieldMax Ultra Option Income Strategy ETF"
     },
-    "IWMY": {
+    "YMAX": {
         "strategy_class": RSIStrategy,
         "strategy_params": {
-            'rsi_period': 22,
-            'oversold_threshold': 38.0,
-            'overbought_threshold': 68.0,
+            'rsi_period': 16,
+            'oversold_threshold': 35.0,
+            'overbought_threshold': 65.0,
             'cash_percentage': 0.15
         },
-        "description": "Defiance R2000 Target 30 Income ETF"
-    }    
+        "description": "YieldMax Universe Fund of Option Income ETF"
+    },
+
 }
 
 # Default configuration for symbols not explicitly configured
@@ -194,7 +238,7 @@ class RealTimeSignalGenerator:
         Returns:
             Tuple of (signal, details) where:
             - signal: "BUY", "SELL", or "HOLD"
-            - details: Dictionary with RSI value, thresholds, and analysis
+            - details: Dictionary with strategy-specific analysis
         """
         if not self.historical_data:
             return "HOLD", {"error": "No historical data available"}
@@ -212,56 +256,175 @@ class RealTimeSignalGenerator:
         # Use all historical data for strategy evaluation
         price_history = self.historical_data.copy()
         
-        # Add current data point to history for RSI calculation
+        # Add current data point to history for calculations
         if current_price is not None:
             price_history.append(latest_data)
         
-        # Check if we have sufficient data for RSI calculation
-        min_required_days = self.strategy.rsi_period + 2  # Need extra day for crossover detection
+        # Determine minimum required days based on strategy type
+        if hasattr(self.strategy, 'rsi_period'):
+            # RSI Strategy
+            min_required_days = self.strategy.rsi_period + 2
+            strategy_type = "RSI"
+        elif hasattr(self.strategy, 'buy_slow_period'):
+            # Adaptive MA Strategy with separate buy/sell periods
+            min_required_days = max(self.strategy.buy_slow_period, self.strategy.sell_slow_period) + 2
+            strategy_type = "Adaptive_MA"
+        elif hasattr(self.strategy, 'slow_period'):
+            # Standard MA Strategy
+            min_required_days = self.strategy.slow_period + 2
+            strategy_type = "MA"
+        elif hasattr(self.strategy, 'period'):
+            # Bollinger Bands Strategy
+            min_required_days = self.strategy.period + 2
+            strategy_type = "Bollinger_Bands"
+        else:
+            # Unknown strategy type
+            min_required_days = 50  # Conservative default
+            strategy_type = "Unknown"
+        
         if len(price_history) < min_required_days:
             return "HOLD", {
-                "error": f"Insufficient data for RSI calculation (need {min_required_days}, have {len(price_history)})"
+                "error": f"Insufficient data for {strategy_type} calculation (need {min_required_days}, have {len(price_history)})"
             }
-        
-        # Calculate current RSI for analysis
-        current_rsi = self.strategy._calculate_rsi(price_history)
         
         # Evaluate buy and sell signals
         should_buy = self.strategy.should_buy(price_history, latest_data)
         should_sell = self.strategy.should_sell(price_history, latest_data)
         
-        # Determine signal
+        # Determine signal and reason based on strategy type
         if should_buy:
             signal = "BUY"
-            reason = f"RSI crossed below oversold threshold ({self.strategy.oversold_threshold})"
+            reason = self._get_buy_reason(strategy_type)
         elif should_sell:
-            signal = "SELL" 
-            reason = f"RSI crossed above overbought threshold ({self.strategy.overbought_threshold})"
+            signal = "SELL"
+            reason = self._get_sell_reason(strategy_type)
         else:
             signal = "HOLD"
-            if current_rsi is None:
-                reason = "RSI calculation unavailable"
-            elif current_rsi < self.strategy.oversold_threshold:
-                reason = f"RSI ({current_rsi:.1f}) is oversold but no crossover detected"
-            elif current_rsi > self.strategy.overbought_threshold:
-                reason = f"RSI ({current_rsi:.1f}) is overbought but no crossover detected"
-            else:
-                reason = f"RSI ({current_rsi:.1f}) is in neutral zone"
+            reason = self._get_hold_reason(strategy_type, price_history)
         
-        # Prepare detailed analysis
-        details = {
-            "rsi_value": current_rsi,
-            "oversold_threshold": self.strategy.oversold_threshold,
-            "overbought_threshold": self.strategy.overbought_threshold,
-            "rsi_period": self.strategy.rsi_period,
+        # Prepare detailed analysis based on strategy type
+        details = self._get_strategy_details(strategy_type, price_history, latest_data, reason)
+        
+        return signal, details
+    
+    def _get_buy_reason(self, strategy_type: str) -> str:
+        """Get buy reason based on strategy type"""
+        if strategy_type == "RSI":
+            return f"RSI crossed below oversold threshold ({self.strategy.oversold_threshold})"
+        elif strategy_type in ["MA", "Adaptive_MA"]:
+            return "Fast MA crossed above slow MA (Golden Cross)"
+        elif strategy_type == "Bollinger_Bands":
+            return "Price touched or went below lower Bollinger Band"
+        else:
+            return "Buy signal detected"
+    
+    def _get_sell_reason(self, strategy_type: str) -> str:
+        """Get sell reason based on strategy type"""
+        if strategy_type == "RSI":
+            return f"RSI crossed above overbought threshold ({self.strategy.overbought_threshold})"
+        elif strategy_type in ["MA", "Adaptive_MA"]:
+            return "Fast MA crossed below slow MA (Death Cross)"
+        elif strategy_type == "Bollinger_Bands":
+            return "Price touched or went above upper Bollinger Band"
+        else:
+            return "Sell signal detected"
+    
+    def _get_hold_reason(self, strategy_type: str, price_history: List[Dict]) -> str:
+        """Get hold reason based on strategy type"""
+        if strategy_type == "RSI":
+            try:
+                current_rsi = self.strategy._calculate_rsi(price_history)
+                if current_rsi is None:
+                    return "RSI calculation unavailable"
+                elif current_rsi < self.strategy.oversold_threshold:
+                    return f"RSI ({current_rsi:.1f}) is oversold but no crossover detected"
+                elif current_rsi > self.strategy.overbought_threshold:
+                    return f"RSI ({current_rsi:.1f}) is overbought but no crossover detected"
+                else:
+                    return f"RSI ({current_rsi:.1f}) is in neutral zone"
+            except:
+                return "RSI analysis unavailable"
+        elif strategy_type in ["MA", "Adaptive_MA"]:
+            return "No MA crossover detected"
+        elif strategy_type == "Bollinger_Bands":
+            return "Price within Bollinger Bands range"
+        else:
+            return "No signal detected"
+    
+    def _get_strategy_details(self, strategy_type: str, price_history: List[Dict], latest_data: Dict, reason: str) -> Dict:
+        """Get strategy-specific details"""
+        base_details = {
             "current_price": latest_data['close'],
             "signal_reason": reason,
             "data_points_used": len(price_history),
             "latest_date": latest_data['date'].strftime('%Y-%m-%d %H:%M:%S'),
-            "strategy_params": self.strategy_params
+            "strategy_params": self.strategy_params,
+            "strategy_type": strategy_type
         }
         
-        return signal, details
+        if strategy_type == "RSI":
+            try:
+                current_rsi = self.strategy._calculate_rsi(price_history)
+                base_details.update({
+                    "rsi_value": current_rsi,
+                    "oversold_threshold": self.strategy.oversold_threshold,
+                    "overbought_threshold": self.strategy.overbought_threshold,
+                    "rsi_period": self.strategy.rsi_period
+                })
+            except:
+                base_details["rsi_value"] = None
+        elif strategy_type == "Adaptive_MA":
+            try:
+                # Calculate current MAs for display
+                buy_fast_ma = self.strategy._calculate_moving_average(price_history, self.strategy.buy_fast_period)
+                buy_slow_ma = self.strategy._calculate_moving_average(price_history, self.strategy.buy_slow_period)
+                sell_fast_ma = self.strategy._calculate_moving_average(price_history, self.strategy.sell_fast_period)
+                sell_slow_ma = self.strategy._calculate_moving_average(price_history, self.strategy.sell_slow_period)
+                
+                base_details.update({
+                    "buy_fast_ma": buy_fast_ma,
+                    "buy_slow_ma": buy_slow_ma,
+                    "sell_fast_ma": sell_fast_ma,
+                    "sell_slow_ma": sell_slow_ma,
+                    "buy_fast_period": self.strategy.buy_fast_period,
+                    "buy_slow_period": self.strategy.buy_slow_period,
+                    "sell_fast_period": self.strategy.sell_fast_period,
+                    "sell_slow_period": self.strategy.sell_slow_period
+                })
+            except:
+                pass
+        elif strategy_type == "MA":
+            try:
+                # Calculate current MAs for display
+                fast_ma = self.strategy._calculate_moving_average(price_history, self.strategy.fast_period)
+                slow_ma = self.strategy._calculate_moving_average(price_history, self.strategy.slow_period)
+                
+                base_details.update({
+                    "fast_ma": fast_ma,
+                    "slow_ma": slow_ma,
+                    "fast_period": self.strategy.fast_period,
+                    "slow_period": self.strategy.slow_period
+                })
+            except:
+                pass
+        elif strategy_type == "Bollinger_Bands":
+            try:
+                # Calculate current Bollinger Bands for display
+                bands = self.strategy._calculate_bollinger_bands(price_history)
+                if bands:
+                    middle, upper, lower = bands
+                    base_details.update({
+                        "bb_middle": middle,
+                        "bb_upper": upper,
+                        "bb_lower": lower,
+                        "bb_period": self.strategy.period,
+                        "std_positive": self.strategy.std_positive,
+                        "std_negative": self.strategy.std_negative
+                    })
+            except:
+                pass
+        
+        return base_details
     
     def get_signal_analysis(self, days_back: int = 30) -> Dict:
         """
@@ -273,8 +436,20 @@ class RealTimeSignalGenerator:
         Returns:
             Dictionary with signal statistics and recent signals
         """
-        if len(self.historical_data) < days_back + self.strategy.rsi_period:
-            days_back = len(self.historical_data) - self.strategy.rsi_period - 1
+        # Determine minimum required days based on strategy type
+        if hasattr(self.strategy, 'rsi_period'):
+            min_required_days = self.strategy.rsi_period
+        elif hasattr(self.strategy, 'buy_slow_period'):
+            min_required_days = max(self.strategy.buy_slow_period, self.strategy.sell_slow_period)
+        elif hasattr(self.strategy, 'slow_period'):
+            min_required_days = self.strategy.slow_period
+        elif hasattr(self.strategy, 'period'):
+            min_required_days = self.strategy.period
+        else:
+            min_required_days = 20  # Conservative default
+        
+        if len(self.historical_data) < days_back + min_required_days:
+            days_back = len(self.historical_data) - min_required_days - 1
         
         if days_back <= 0:
             return {"error": "Insufficient historical data for analysis"}
@@ -284,7 +459,7 @@ class RealTimeSignalGenerator:
         
         # Analyze signals for each day in the period
         for i in range(len(self.historical_data) - days_back, len(self.historical_data)):
-            if i < self.strategy.rsi_period + 1:
+            if i < min_required_days + 1:
                 continue
                 
             # Get price history up to this day
@@ -294,7 +469,23 @@ class RealTimeSignalGenerator:
             # Evaluate signals
             should_buy = self.strategy.should_buy(price_history, current_data)
             should_sell = self.strategy.should_sell(price_history, current_data)
-            rsi_value = self.strategy._calculate_rsi(price_history)
+            
+            # Get indicator value if available
+            indicator_value = None
+            if hasattr(self.strategy, '_calculate_rsi'):
+                try:
+                    indicator_value = self.strategy._calculate_rsi(price_history)
+                except:
+                    indicator_value = None
+            elif hasattr(self.strategy, '_calculate_moving_average'):
+                try:
+                    # For MA strategies, show the fast MA value
+                    if hasattr(self.strategy, 'buy_fast_period'):
+                        indicator_value = self.strategy._calculate_moving_average(price_history, self.strategy.buy_fast_period)
+                    elif hasattr(self.strategy, 'fast_period'):
+                        indicator_value = self.strategy._calculate_moving_average(price_history, self.strategy.fast_period)
+                except:
+                    indicator_value = None
             
             if should_buy:
                 signal = "BUY"
@@ -309,7 +500,7 @@ class RealTimeSignalGenerator:
             recent_signals.append({
                 "date": current_data['date'].strftime('%Y-%m-%d'),
                 "signal": signal,
-                "rsi": rsi_value,
+                "indicator": indicator_value,
                 "price": current_data['close']
             })
         
@@ -872,17 +1063,39 @@ def production_signals_summary(symbol=None, collect_for_email=False):
         buy_threshold = "None in range"
         sell_threshold = "None in range"
         
-        # Find BUY threshold - last transition TO BUY (most restrictive entry point)
-        buy_transitions = [t for t in transitions if t['from'] == 'BUY']
+        # Find BUY threshold - any transition involving BUY (either starting or ending)
+        buy_transitions = [t for t in transitions if t['to'] == 'BUY' or t['from'] == 'BUY']
         if buy_transitions:
-            buy_thresh = max(buy_transitions, key=lambda x: x['change'])
-            buy_threshold = f"{buy_thresh['change']:+5.1f}% (${buy_thresh['price']:.2f})"
+            # Get the full range of BUY activity
+            buy_changes = [t['change'] for t in buy_transitions]
+            min_buy = min(buy_changes)  # When BUY signals start
+            max_buy = max(buy_changes)  # When BUY signals end
+            
+            if min_buy == max_buy:
+                # Single transition point
+                buy_threshold = f"{min_buy:+5.1f}% (${buy_transitions[0]['price']:.2f})"
+            else:
+                # Range of BUY activity
+                min_price = next(t['price'] for t in buy_transitions if t['change'] == min_buy)
+                max_price = next(t['price'] for t in buy_transitions if t['change'] == max_buy)
+                buy_threshold = f"{min_buy:+5.1f}% to {max_buy:+5.1f}% (${min_price:.2f} to ${max_price:.2f})"
         
-        # Find SELL threshold - first transition TO SELL (most restrictive exit point)  
-        sell_transitions = [t for t in transitions if t['to'] == 'SELL']
+        # Find SELL threshold - any transition involving SELL (either starting or ending)
+        sell_transitions = [t for t in transitions if t['to'] == 'SELL' or t['from'] == 'SELL']
         if sell_transitions:
-            sell_thresh = min(sell_transitions, key=lambda x: x['change'])
-            sell_threshold = f"{sell_thresh['change']:+5.1f}% (${sell_thresh['price']:.2f})"
+            # Get the full range of SELL activity
+            sell_changes = [t['change'] for t in sell_transitions]
+            min_sell = min(sell_changes)  # When SELL signals start
+            max_sell = max(sell_changes)  # When SELL signals end
+            
+            if min_sell == max_sell:
+                # Single transition point
+                sell_threshold = f"{min_sell:+5.1f}% (${sell_transitions[0]['price']:.2f})"
+            else:
+                # Range of SELL activity
+                min_price = next(t['price'] for t in sell_transitions if t['change'] == min_sell)
+                max_price = next(t['price'] for t in sell_transitions if t['change'] == max_sell)
+                sell_threshold = f"{min_sell:+5.1f}% to {max_sell:+5.1f}% (${min_price:.2f} to ${max_price:.2f})"
         
         if not collect_for_email:
             # KEY THRESHOLDS - Based on actual transition points
