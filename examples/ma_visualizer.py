@@ -33,7 +33,13 @@ def demo_scenario_visualization():
     optimizer = GridSearchOptimizer("strategies/adaptive_ma_crossover.py")
     results = optimizer.optimize(
         symbol="SPXL",
-        parameter_grid={'slow_period': [20], 'fast_period': [10], 'cash_percentage': [0.15]},
+        parameter_grid={
+            'buy_slow_period': [20], 
+            'buy_fast_period': [10], 
+            'sell_slow_period': [25], 
+            'sell_fast_period': [12], 
+            'cash_percentage': [0.15]
+        },
         initial_capital=10000,
         test_scenarios=1,  # Just one scenario for demo
         export_csv=False

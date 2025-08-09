@@ -47,8 +47,10 @@ def setup_data_directory():
 MAIN_DATA_DIR = setup_data_directory()
 
 # Define parameter ranges to explore (must match strategy's valid ranges)
-slow_periods = range(5,20,1)
-fast_periods = range(1,16,1)
+buy_slow_periods = range(10, 40, 5)  # 10, 15, 20, 25, 30, 35
+buy_fast_periods = range(3, 15, 2)   # 3, 5, 7, 9, 11, 13
+sell_slow_periods = range(15, 45, 5) # 15, 20, 25, 30, 35, 40
+sell_fast_periods = range(5, 35, 5)  # 5, 10, 15, 20, 25, 30
 cash_percentages = [0.10]
 
 # List of stocks to analyze
@@ -74,11 +76,13 @@ def multi_stock_ma_optimization_demo():
 
     
     print(f"📊 MA parameter space to explore:")
-    print(f"   Slow periods: {list(slow_periods)}")
-    print(f"   Fast periods: {list(fast_periods)}")
+    print(f"   Buy Slow periods: {list(buy_slow_periods)}")
+    print(f"   Buy Fast periods: {list(buy_fast_periods)}")
+    print(f"   Sell Slow periods: {list(sell_slow_periods)}")
+    print(f"   Sell Fast periods: {list(sell_fast_periods)}")
     print(f"   Cash percentages: {cash_percentages}")
     print(f"   Stocks to analyze: {symbols}")
-    print(f"   Total combinations per stock: {len(slow_periods) * len(fast_periods) * len(cash_percentages)}")
+    print(f"   Total combinations per stock: {len(buy_slow_periods) * len(buy_fast_periods) * len(sell_slow_periods) * len(sell_fast_periods) * len(cash_percentages)}")
     print(f"   Simulations per combination: 100")
     print(f"   Exploration order: Sequential by stock")
     print()
@@ -112,10 +116,14 @@ def multi_stock_ma_optimization_demo():
             output_csv = f"results/ma_optimization_{symbol}_results.csv"
             
             # Generate all MA parameter combinations for this stock
-            all_combinations = list(product(slow_periods, fast_periods, cash_percentages))
+            all_combinations = list(product(buy_slow_periods, buy_fast_periods, sell_slow_periods, sell_fast_periods, cash_percentages))
             
-            # Filter out invalid combinations (fast must be less than slow)
-            valid_combinations = [(slow, fast, cash) for slow, fast, cash in all_combinations if fast < slow]
+            # Filter out invalid combinations (fast must be less than slow for both buy and sell)
+            valid_combinations = [
+                (buy_slow, buy_fast, sell_slow, sell_fast, cash) 
+                for buy_slow, buy_fast, sell_slow, sell_fast, cash in all_combinations 
+                if buy_fast < buy_slow and sell_fast < sell_slow
+            ]
             
             # Shuffle the combinations for random exploration
             random.shuffle(valid_combinations)
@@ -123,16 +131,18 @@ def multi_stock_ma_optimization_demo():
             print(f"🔀 Testing {len(valid_combinations)} MA combinations for {symbol}")
             
             # Run through all combinations for this stock
-            for combination_num, (slow_period, fast_period, cash_pct) in enumerate(valid_combinations, 1):
+            for combination_num, (buy_slow_period, buy_fast_period, sell_slow_period, sell_fast_period, cash_pct) in enumerate(valid_combinations, 1):
                 # Create a small parameter grid for this combination
                 parameter_grid = {
-                    'slow_period': [slow_period],
-                    'fast_period': [fast_period],
+                    'buy_slow_period': [buy_slow_period],
+                    'buy_fast_period': [buy_fast_period],
+                    'sell_slow_period': [sell_slow_period],
+                    'sell_fast_period': [sell_fast_period],
                     'cash_percentage': [cash_pct]
                 }
                 
                 print(f"🔬 {symbol} Combo {combination_num}/{len(valid_combinations)}: "
-                      f"slow={slow_period}, fast={fast_period}, cash={cash_pct}")
+                      f"buy({buy_fast_period},{buy_slow_period}), sell({sell_fast_period},{sell_slow_period}), cash={cash_pct}")
                 
                 # Run optimization for this parameter combination
                 results = optimizer.optimize(
