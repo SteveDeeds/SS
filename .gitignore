@@ -11,3 +11,12 @@ strategy_heatmaps/
 src/orders/__pycache__/
 src/portfolio/__pycache__/
 *.pyc
+email_config_example.env
+examples/heatmap_demo.py
+src/optimizer/__pycache__/grid_search.cpython-313.pyc
+src/orders/__pycache__/manager.cpython-313.pyc
+src/orders/__pycache__/order.cpython-313.pyc
+src/portfolio/__pycache__/manager.cpython-313.pyc
+src/simulator/__pycache__/engine.cpython-313.pyc
+src/utils/__pycache__/scenario_visualizer.cpython-313.pyc
+strategies/__pycache__/adaptive_ma_crossover.cpython-313.pyc
