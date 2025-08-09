@@ -49,7 +49,7 @@ class Order:
         self.datetime_executed: Optional[datetime] = None
         
         # Status and execution
-        self.status = 'PENDING'  # PENDING, FILLED, CANCELED, EXPIRED
+        self.status = 'PENDING'  # PENDING, EXECUTED, CANCELED, EXPIRED
         self.execution_price: Optional[float] = None
     
     def _generate_order_id(self, symbol: str, order_type: str, quantity: int) -> str:
@@ -88,8 +88,8 @@ class Order:
         return self.type in ['MARKET_SELL', 'LIMIT_SELL']
     
     def fill(self, execution_price: float, execution_time: datetime) -> None:
-        """Mark order as filled"""
-        self.status = 'FILLED'
+        """Mark order as executed"""
+        self.status = 'EXECUTED'
         self.execution_price = execution_price
         self.datetime_executed = execution_time
     

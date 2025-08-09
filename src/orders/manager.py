@@ -84,7 +84,7 @@ class OrderManager:
             self.place_order(order)
     
     def process_pending_orders(self, market_data: Dict[str, Any], portfolio: Dict[str, Any], 
-                             current_time: datetime) -> List[Dict[str, Any]]:
+                             current_time: datetime, debug: bool = False) -> List[Dict[str, Any]]:
         """
         Process pending orders against current market data
         
@@ -92,6 +92,7 @@ class OrderManager:
             market_data: Current market data
             portfolio: Current portfolio state
             current_time: Current simulation time (required)
+            debug: Whether to print debug information
             
         Returns:
             List of executed trades
@@ -103,6 +104,8 @@ class OrderManager:
         for order in self.pending_orders:
             # Check if order has expired
             if order.is_expired(current_time):
+                if debug:
+                    print(f"⏰ ORDER EXPIRED: {order.type} {order.quantity} {order.symbol} @ {current_time.strftime('%Y-%m-%d %H:%M:%S')} (Order ID: {order.order_id})")
                 order.expire(current_time)
                 self.expired_orders.append(order)
                 continue

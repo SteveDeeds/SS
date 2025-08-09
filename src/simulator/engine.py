@@ -100,7 +100,8 @@ class TradingSimulator:
                 executed_trades = self.order_manager.process_pending_orders(
                     market_data=current_market_data,
                     portfolio=portfolio.get_current_state(),
-                    current_time=execution_time
+                    current_time=execution_time,
+                    debug=DEBUG
                 )
                 
                 # Update portfolio with executed trades
@@ -133,10 +134,16 @@ class TradingSimulator:
             
             # Only generate new orders after warmup period
             if not is_warmup_period:
+                # Get current portfolio state and add pending orders information
+                portfolio_state = portfolio.get_current_state()
+                
+                # Add pending orders as actual Order objects for strategy decision making
+                portfolio_state['pending_orders'] = self.order_manager.get_pending_orders()
+                
                 # Generate trading signals and orders based on current day's data
                 orders = composite_strategy.evaluate_and_place_orders(
                     price_history=historical_context,
-                    portfolio=portfolio.get_current_state(),
+                    portfolio=portfolio_state,
                     current_market_data=current_market_data
                 )
                 
@@ -191,6 +198,59 @@ class TradingSimulator:
             }
             daily_portfolio_values.append(daily_snapshot)
         
+        # END OF SIMULATION CLEANUP
+        # Liquidate remaining holdings and resolve pending orders
+        if DEBUG:
+            print(f"\n🧹 SIMULATION CLEANUP:")
+        
+        # 1. Sell any remaining holdings at final market price
+        final_market_data = price_history[-1]  # Last day's data
+        final_market_price = final_market_data.get('close', 0)
+        
+        remaining_holdings = portfolio.get_current_state().get('holdings', {})
+        # Create a copy of holdings to avoid "dictionary changed size during iteration" error
+        holdings_to_liquidate = dict(remaining_holdings)
+        
+        for symbol_held, holding_data in holdings_to_liquidate.items():
+            quantity = holding_data.get('quantity', 0)
+            if quantity > 0:
+                # Create a liquidation trade at final market price
+                liquidation_trade = {
+                    'order_id': f'LIQUIDATION_{symbol_held}_{quantity}',
+                    'symbol': symbol_held,
+                    'quantity': quantity,
+                    'execution_price': final_market_price,
+                    'commission': 0.0,  # No commission for liquidation
+                    'direction': 'SELL',
+                    'executed_at': final_market_data.get('date'),
+                    'order_type': 'LIQUIDATION'
+                }
+                
+                success = self.portfolio_manager.execute_trade(portfolio, liquidation_trade)
+                if success and DEBUG:
+                    proceeds = quantity * final_market_price
+                    print(f"   💰 LIQUIDATED: {quantity} shares of {symbol_held} at ${final_market_price:.2f} = ${proceeds:.2f}")
+        
+        # 2. Cancel all pending orders
+        pending_orders = self.order_manager.get_pending_orders()
+        canceled_count = 0
+        for order in pending_orders:
+            if order.status == 'PENDING':
+                order.cancel()
+                self.order_manager.canceled_orders.append(order)
+                canceled_count += 1
+        
+        # Clear pending orders list
+        self.order_manager.pending_orders = []
+        
+        if DEBUG and canceled_count > 0:
+            print(f"   ❌ CANCELED: {canceled_count} pending orders")
+        
+        if DEBUG:
+            final_cash = portfolio.get_current_state().get('cash_balance', 0)
+            print(f"   💰 FINAL CASH BALANCE: ${final_cash:.2f}")
+            print(f"   📊 FINAL HOLDINGS: None (all liquidated)")
+        
         # Calculate final results
         final_value = portfolio.get_total_value()
         total_return = (final_value / initial_capital) - 1
@@ -224,11 +284,17 @@ class TradingSimulator:
                     else:
                         price_info = " (market price)"
                     
-                    # Show execution status
-                    if execution_price:
-                        status = f"✅ EXECUTED at ${execution_price:.2f}"
+                    # Show execution status using actual order status
+                    if order.status == 'EXECUTED':
+                        status = f"✅ EXECUTED at ${order.execution_price:.2f}"
+                    elif order.status == 'PENDING':
+                        status = "⏳ PENDING"
+                    elif order.status == 'EXPIRED':
+                        status = "⏰ EXPIRED"
+                    elif order.status == 'CANCELED':
+                        status = "❌ CANCELED"
                     else:
-                        status = "⏳ PENDING/EXPIRED"
+                        status = f"❓ {order.status}"
                     
                     print(f"   {i:2d}. {order_type} {quantity} shares of {symbol}{price_info} - {status}")
                     print(f"       Placed: {placement_str}")

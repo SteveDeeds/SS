@@ -230,6 +230,20 @@ class BollingerBandsStrategy(OptimizableStrategy):
         available_cash = portfolio.get('cash_balance', 0)
         current_price = current_market_data.get('close', 0)
         
+        # Get pending orders to calculate committed shares
+        pending_orders = portfolio.get('pending_orders', [])
+        
+        # Calculate shares committed to pending sell orders for this symbol
+        committed_shares = 0
+        for order in pending_orders:
+            if (order.symbol == symbol and 
+                order.type in ['LIMIT_SELL', 'MARKET_SELL'] and
+                order.status == 'PENDING'):
+                committed_shares += order.quantity
+        
+        # Calculate available shares for new sell orders
+        available_shares = current_shares - committed_shares
+        
         if current_price <= 0:
             return orders
         
@@ -249,50 +263,54 @@ class BollingerBandsStrategy(OptimizableStrategy):
         try:
             # BUY LOGIC: Place limit buy order at lower band if we don't have shares
             if current_shares == 0 and available_cash > 0:
-                # Calculate position size
-                position_size = self.get_position_size(available_cash, current_price)
-                
-                if position_size > 0 and position_size <= available_cash:
-                    quantity = int(position_size / lower)  # Use lower band price for quantity calc
+                # Check if price is near or below lower band (buy signal)
+                if current_price <= lower * 1.01:  # Allow 1% tolerance
+                    # Calculate position size
+                    position_size = self.get_position_size(available_cash, current_price)
                     
-                    if quantity > 0:
-                        # Set expiration to next day at market close
-                        expiration_time = None
-                        if placement_time:
-                            next_day = placement_time + timedelta(days=1)
-                            expiration_time = next_day.replace(hour=16, minute=0, second=0, microsecond=0)
+                    if position_size > 0 and position_size <= available_cash:
+                        quantity = int(position_size / lower)  # Use lower band price for quantity calc
                         
-                        # Create LIMIT BUY order at lower band
-                        buy_order = Order(
-                            symbol=symbol,
-                            order_type='LIMIT_BUY',
-                            quantity=quantity,
-                            limit_price=lower,  # Buy at lower band
-                            stop_price=None,
-                            placement_time=placement_time,
-                            expiration_date=expiration_time
-                        )
-                        orders.append(buy_order)
+                        if quantity > 0:
+                            # Set expiration to next day at market close
+                            expiration_time = None
+                            if placement_time:
+                                next_day = placement_time + timedelta(days=1)
+                                expiration_time = next_day.replace(hour=16, minute=0, second=0, microsecond=0)
+                            
+                            # Create LIMIT BUY order at lower band
+                            buy_order = Order(
+                                symbol=symbol,
+                                order_type='LIMIT_BUY',
+                                quantity=quantity,
+                                limit_price=lower,  # Buy at lower band
+                                stop_price=None,
+                                placement_time=placement_time,
+                                expiration_date=expiration_time
+                            )
+                            orders.append(buy_order)
             
-            # SELL LOGIC: Place limit sell order at upper band if we have shares
-            elif current_shares > 0:
-                # Set expiration to next day at market close
-                expiration_time = None
-                if placement_time:
-                    next_day = placement_time + timedelta(days=1)
-                    expiration_time = next_day.replace(hour=16, minute=0, second=0, microsecond=0)
-                
-                # Create LIMIT SELL order at upper band
-                sell_order = Order(
-                    symbol=symbol,
-                    order_type='LIMIT_SELL',
-                    quantity=current_shares,
-                    limit_price=upper,  # Sell at upper band
-                    stop_price=None,
-                    placement_time=placement_time,
-                    expiration_date=expiration_time
-                )
-                orders.append(sell_order)
+            # SELL LOGIC: Place limit sell order at upper band if we have available shares AND price is near upper band
+            elif available_shares > 0:
+                # Check if price is near or above upper band (sell signal)
+                if current_price >= upper * 0.99:  # Allow 1% tolerance
+                    # Set expiration to next day at market close
+                    expiration_time = None
+                    if placement_time:
+                        next_day = placement_time + timedelta(days=1)
+                        expiration_time = next_day.replace(hour=16, minute=0, second=0, microsecond=0)
+                    
+                    # Create LIMIT SELL order at upper band for available shares only
+                    sell_order = Order(
+                        symbol=symbol,
+                        order_type='LIMIT_SELL',
+                        quantity=available_shares,  # Only sell available shares, not all shares
+                        limit_price=upper,  # Sell at upper band
+                        stop_price=None,
+                        placement_time=placement_time,
+                        expiration_date=expiration_time
+                    )
+                    orders.append(sell_order)
                 
         except Exception as e:
             print(f"⚠️ Bollinger Bands order placement error: {e}")
