@@ -65,13 +65,33 @@ SYMBOL_CONFIGURATIONS = {
             'cash_percentage': 0.15
         },
         "description": "Microsoft Corporation"
-    },    
+    },
+    "MSFT": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 10,
+            'oversold_threshold': 30.0,
+            'overbought_threshold': 70.0,
+            'cash_percentage': 0.15
+        },
+        "description": "Microsoft Corporation"
+    },       
     "MSTY": {
         "strategy_class": RSIStrategy,
         "strategy_params": {
             'rsi_period': 14,
             'oversold_threshold': 27.0,
             'overbought_threshold': 69.0,
+            'cash_percentage': 0.15
+        },
+        "description": "Yieldmax MSTR Option Income Strategy ETF"
+    },        
+    "MSTY": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 10,
+            'oversold_threshold': 20.0,
+            'overbought_threshold': 75.0,
             'cash_percentage': 0.15
         },
         "description": "Yieldmax MSTR Option Income Strategy ETF"
@@ -117,12 +137,32 @@ SYMBOL_CONFIGURATIONS = {
         },
         "description": "YieldMax Ultra Option Income Strategy ETF"
     },
+    "ULTY": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 10,
+            'oversold_threshold': 20.0,
+            'overbought_threshold': 75.0,
+            'cash_percentage': 0.15
+        },
+        "description": "YieldMax Ultra Option Income Strategy ETF"
+    },
     "YMAX": {
         "strategy_class": RSIStrategy,
         "strategy_params": {
             'rsi_period': 16,
             'oversold_threshold': 35.0,
             'overbought_threshold': 65.0,
+            'cash_percentage': 0.15
+        },
+        "description": "YieldMax Universe Fund of Option Income ETF"
+    },
+    "YMAX": {
+        "strategy_class": RSIStrategy,
+        "strategy_params": {
+            'rsi_period': 10,
+            'oversold_threshold': 20.0,
+            'overbought_threshold': 70.0,
             'cash_percentage': 0.15
         },
         "description": "YieldMax Universe Fund of Option Income ETF"
