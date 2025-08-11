@@ -2,24 +2,7 @@
 """
 Bollinger Bands Strategy Continuous Optimization Demo
 
-This example demonstrates how to run Bollinger Bands strategy optimization continuously                 # Show CSV file status every 20 combinations
-                if combination_num % 20 == 0:
-                    print(f"📄 CSV Update: {combination_num}/{len(all_combinations)} combinations for {symbol}")
-                    if os.path.exists(output_csv):
-                        with open(output_csv, 'r') as f:
-                            lines = f.readlines()
-                        print(f"   File contains {len(lines)} lines (including header)")
-                    
-                    # Show timing statistics for last 20 combinations
-                    print(f"   ⏱️  Last combination took {duration:.1f}s")
-            
-            print(f"\n✅ {symbol} completed! ({len(all_combinations)} combinations)")
-            print(f"   Results saved to: {output_csv}")
-            print(f"📊 Total combinations tested so far: {total_combinations}")
-            
-            # Log stock completion
-            with open(timing_log_file, 'a') as log_file:
-                log_file.write(f"\n--- {symbol} COMPLETED at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+This example demonstrates how to run Bollinger Bands strategy optimization continuously
 constantly updating a CSV file with results. Each parameter combination
 gets added as a new row to enable real-time monitoring of optimization progress.
 
@@ -65,12 +48,17 @@ MAIN_DATA_DIR = setup_data_directory()
 
 # Define Bollinger Bands parameter ranges to explore (must match Bollinger Bands strategy's valid ranges)
 periods = range(5, 50, 5)  # Period: 10, 15, 20, 25, 30, 35, 40, 45
-std_positive_values = [0.5, 1.0, 1.5, 2.0, 2.5]  # Standard deviations for upper band
-std_negative_values = [1.0, 1.5, 2.0, 2.5, 3.0]  # Standard deviations for lower band
+std_positive_values = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0]  # Standard deviations for upper band
+std_negative_values = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0]  # Standard deviations for lower band
 cash_percentages = [0.10]
 
 # List of stocks to analyze
-symbols = ["IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY", "NVDY", "SPXL"]
+symbols = ["IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY", "NVDY", "SPXL", "AAPL", 
+           "AVGO", "GOOGL", "GOOG", "META", "NFLX", "TMUS", 
+           "AMZN", "TSLA", "HD", "SBUX", "LLY", "UNH", "JNJ", "ABBV", "JPM", "V", 
+           "MA", "BAC", "GE", "RTX", "HON", "CAT", "WMT", "PG", "KO", "PEP", "XOM", 
+           "CVX", "COP", "EOG", "NEE", "DUK", "SRE", "SO", "LIN", "SHW", "APD", 
+           "ECL", "PLD", "AMT", "EQIX", "CCI", "NVDA", "MSFT"]
 
 
 def multi_stock_bollinger_bands_optimization_demo():

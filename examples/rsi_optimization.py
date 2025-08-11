@@ -53,7 +53,12 @@ overbought_thresholds = [60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0]  # Over
 cash_percentages = [0.10]
 
 # List of stocks to analyze
-symbols = ["IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY", "NVDY", "SPXL"]
+symbols = ["IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY", "NVDY", "SPXL", "AAPL", 
+           "AVGO", "GOOGL", "GOOG", "META", "NFLX", "TMUS", 
+           "AMZN", "TSLA", "HD", "SBUX", "LLY", "UNH", "JNJ", "ABBV", "JPM", "V", 
+           "MA", "BAC", "GE", "RTX", "HON", "CAT", "WMT", "PG", "KO", "PEP", "XOM", 
+           "CVX", "COP", "EOG", "NEE", "DUK", "SRE", "SO", "LIN", "SHW", "APD", 
+           "ECL", "PLD", "AMT", "EQIX", "CCI", "NVDA", "MSFT"]
 
 def multi_stock_rsi_optimization_demo():
     """

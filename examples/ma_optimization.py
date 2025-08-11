@@ -54,8 +54,8 @@ sell_fast_periods = range(5, 35, 5)  # 5, 10, 15, 20, 25, 30
 cash_percentages = [0.10]
 
 # List of stocks to analyze
-# symbols = ["IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY", "NVDY", "SPXL"]
-symbols = ["AAPL", "AVGO", "GOOGL", "GOOG", "META", "NFLX", "TMUS", 
+symbols = ["IWMY", "AMDY", "YMAX", "MSFT", "MSTY", "ULTY", "NVDY", "SPXL", "AAPL", 
+           "AVGO", "GOOGL", "GOOG", "META", "NFLX", "TMUS", 
            "AMZN", "TSLA", "HD", "SBUX", "LLY", "UNH", "JNJ", "ABBV", "JPM", "V", 
            "MA", "BAC", "GE", "RTX", "HON", "CAT", "WMT", "PG", "KO", "PEP", "XOM", 
            "CVX", "COP", "EOG", "NEE", "DUK", "SRE", "SO", "LIN", "SHW", "APD", 
