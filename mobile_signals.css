@@ -1,0 +1,227 @@
+/* Mobile Trading Signals CSS */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    margin: 0;
+    padding: 10px;
+    background-color: #f8f9fa;
+    line-height: 1.4;
+}
+
+.header {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.header h1 {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+}
+
+.header .timestamp {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.summary-card {
+    background: white;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    border-left: 4px solid #ddd;
+}
+
+.summary-card.buy { border-left-color: #28a745; }
+.summary-card.sell { border-left-color: #dc3545; }
+.summary-card.hold { border-left-color: #6c757d; }
+.summary-card.error { border-left-color: #ffc107; }
+
+.summary-card .count {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.summary-card .label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.signal-card {
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.signal-header {
+    padding: 12px 15px;
+    border-left: 5px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.signal-header.buy { border-left-color: #28a745; background-color: #f8fff9; }
+.signal-header.sell { border-left-color: #dc3545; background-color: #fff8f8; }
+.signal-header.hold { border-left-color: #6c757d; background-color: #f8f9fa; }
+.signal-header.error { border-left-color: #ffc107; background-color: #fffdf5; }
+
+.symbol {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+}
+
+.signal-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.price {
+    font-size: 18px;
+    color: #333;
+    margin-top: 2px;
+}
+
+.signal-body {
+    padding: 12px 15px;
+    border-top: 1px solid #eee;
+}
+
+.strategy-name {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 8px;
+    font-style: italic;
+}
+
+.metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.metric {
+    font-size: 12px;
+}
+
+.metric-label {
+    color: #666;
+    display: block;
+}
+
+.metric-value {
+    font-weight: bold;
+    color: #333;
+}
+
+.details {
+    font-size: 12px;
+    color: #666;
+    background: #f8f9fa;
+    padding: 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.error-message {
+    color: #dc3545;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+/* New Transitions Section */
+.transitions-section {
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.transitions-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.transitions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.transition-card {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 6px;
+    border-left: 3px solid #ddd;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.transition-card.buy-threshold { border-left-color: #28a745; }
+.transition-card.sell-threshold { border-left-color: #dc3545; }
+
+.transition-label {
+    font-size: 14px;
+    color: #666;
+    white-space: nowrap;
+}
+
+.transition-price {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    flex-shrink: 0;
+}
+
+.transition-change {
+    font-size: 18px;
+    color: #666;
+    flex-shrink: 0;
+}
+
+.transition-change.positive { color: #28a745; }
+.transition-change.negative { color: #dc3545; }
+
+.refresh-info {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 12px;
+    color: #666;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+    body { padding: 8px; }
+    .header h1 { font-size: 20px; }
+    .summary { grid-template-columns: repeat(2, 1fr); }
+    .transitions-grid { grid-template-columns: 1fr; }
+}
