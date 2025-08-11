@@ -20,3 +20,8 @@ src/portfolio/__pycache__/manager.cpython-313.pyc
 src/simulator/__pycache__/engine.cpython-313.pyc
 src/utils/__pycache__/scenario_visualizer.cpython-313.pyc
 strategies/__pycache__/adaptive_ma_crossover.cpython-313.pyc
+automation_log.txt
+src/__pycache__/__init__.cpython-313.pyc
+src/data/__pycache__/__init__.cpython-313.pyc
+src/data/__pycache__/augmentation.cpython-313.pyc
+src/data/__pycache__/loader.cpython-313.pyc
