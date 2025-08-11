@@ -103,29 +103,35 @@ class OptimalStrategyFinder:
         print("=" * 50)
         
         original_count = len(df)
-        print(f"📊 Starting with {original_count} strategies")
+        initial_symbols = df['symbol'].nunique() if not df.empty else 0
+        print(f"📊 Starting with {original_count} strategies across {initial_symbols} symbols")
         
         # Filter 1: average_return > 0
         df = df[df['average_return'] > 0]
-        print(f"   Filter 1 (average_return > 0): {len(df)} remaining ({original_count - len(df)} removed)")
+        unique_symbols = df['symbol'].nunique() if not df.empty else 0
+        print(f"   Filter 1 (average_return > 0): {len(df)} remaining ({original_count - len(df)} removed) - {unique_symbols} symbols")
         
         # Filter 2: win_rate > 0.25
         df = df[df['win_rate'] > 0.25]
-        print(f"   Filter 2 (win_rate > 0.25): {len(df)} remaining")
+        unique_symbols = df['symbol'].nunique() if not df.empty else 0
+        print(f"   Filter 2 (win_rate > 0.25): {len(df)} remaining - {unique_symbols} symbols")
         
         # Filter 3: sharpe_ratio >= 0.5
         df = df[df['sharpe_ratio'] >= 0.5]
-        print(f"   Filter 3 (sharpe_ratio >= 0.5): {len(df)} remaining")
+        unique_symbols = df['symbol'].nunique() if not df.empty else 0
+        print(f"   Filter 3 (sharpe_ratio >= 0.5): {len(df)} remaining - {unique_symbols} symbols")
         
         # Filter 4: percentile_25th_return > 0
         df = df[df['percentile_25th_return'] > 0]
-        print(f"   Filter 4 (percentile_25th_return > 0): {len(df)} remaining")
+        unique_symbols = df['symbol'].nunique() if not df.empty else 0
+        print(f"   Filter 4 (percentile_25th_return > 0): {len(df)} remaining - {unique_symbols} symbols")
         
         # Filter 5: total_trades >= 4 * test_scenarios
         df = df[df['total_trades'] >= 4 * df['test_scenarios']]
-        print(f"   Filter 5 (total_trades >= 4 * test_scenarios): {len(df)} remaining")
+        unique_symbols = df['symbol'].nunique() if not df.empty else 0
+        print(f"   Filter 5 (total_trades >= 4 * test_scenarios): {len(df)} remaining - {unique_symbols} symbols")
         
-        print(f"\n✅ Final qualified strategies: {len(df)}")
+        print(f"\n✅ Final qualified strategies: {len(df)} across {unique_symbols} symbols")
         
         return df
     
@@ -275,17 +281,29 @@ class OptimalStrategyFinder:
         # Display results
         self.display_strategy_summary(optimal_strategies, detailed=detailed)
         
-        # Analyze by symbol
+        # Analyze by symbol (PRIMARY FOCUS - One optimal strategy per symbol)
         symbol_analysis = self.analyze_by_symbol(qualified_strategies)
         
-        # Export results
+        # Display summary of per-symbol results
+        if symbol_analysis:
+            best_per_symbol = pd.concat(symbol_analysis.values(), ignore_index=True)
+            print(f"\n🎯 PER-SYMBOL OPTIMAL STRATEGIES SUMMARY")
+            print("=" * 60)
+            print(f"✅ Found optimal strategies for {len(symbol_analysis)} symbols")
+            print(f"📊 Average ROIC: {best_per_symbol['return_on_avg_invested_capital'].mean():.4f}")
+            print(f"🎯 Average Win Rate: {best_per_symbol['win_rate'].mean():.3f}")
+            print(f"📈 Average Sharpe: {best_per_symbol['sharpe_ratio'].mean():.3f}")
+        
+        # Export results (DISABLED - no saving)
         if export and not optimal_strategies.empty:
-            self.export_results(optimal_strategies, "top_optimal_strategies.csv")
-            
-            # Also export best strategy per symbol
-            if symbol_analysis:
-                best_per_symbol = pd.concat(symbol_analysis.values(), ignore_index=True)
-                self.export_results(best_per_symbol, "best_strategy_per_symbol.csv")
+            print(f"\n💾 EXPORT DISABLED - Results not saved to CSV files")
+            # Commented out to disable saving
+            # self.export_results(optimal_strategies, "top_optimal_strategies.csv")
+            # 
+            # # Also export best strategy per symbol
+            # if symbol_analysis:
+            #     best_per_symbol = pd.concat(symbol_analysis.values(), ignore_index=True)
+            #     self.export_results(best_per_symbol, "best_strategy_per_symbol.csv")
         
         # Generate heat maps for optimal strategies
         if generate_heatmaps and not optimal_strategies.empty:
@@ -397,7 +415,7 @@ def demo_heatmap_analysis():
     print("=" * 60)
     
     finder = OptimalStrategyFinder()
-    results = finder.run_analysis(top_n=5, export=True, detailed=True, generate_heatmaps=True)
+    results = finder.run_analysis(top_n=5, export=True, detailed=True, generate_heatmaps=False)
     
     if results and results['optimal_strategies'] is not None and not results['optimal_strategies'].empty:
         print(f"\n🎨 Heat maps generated for parameter space visualization!")
