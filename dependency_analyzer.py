@@ -270,9 +270,13 @@ def main():
     # Target files to analyze
     target_files = [
         "heatmap_visualizer.py",
-        "examples/continuous_optimization_demo.py", 
-        "examples/scenario_visualizer.py"
-        "strategies/adaptive_ma_crossover.py"
+        "mobile_server.py.py",
+        "mobile_signals.py",
+        "examples/generic_strategy_optimization.py",
+        "examples/enhanced_strategy_visualizer.py",
+        "strategies/adaptive_ma_crossover.py",
+        "strategies/bollinger_bands_strategy.py",
+        "strategies/rsi_strategy.py"
     ]
     
     print("🔬 Trading System Dependency Analyzer")
